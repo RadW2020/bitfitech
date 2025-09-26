@@ -221,8 +221,8 @@ export default class ExchangeClient {
       throw new Error('Exchange client not initialized');
     }
 
-    // Rate limiting
-    if (!this.#rateLimiter.isAllowed(this.#userId, 'orders')) {
+    // Rate limiting (only if enabled)
+    if (config.security.enableRateLimit && !this.#rateLimiter.isAllowed(this.#userId, 'orders')) {
       throw new Error('Rate limit exceeded: too many orders');
     }
 
@@ -537,6 +537,12 @@ export default class ExchangeClient {
     if (this.#grenacheService) {
       this.#grenacheService.destroy();
     }
+    
+    // Destroy rate limiter
+    if (this.#rateLimiter) {
+      this.#rateLimiter.destroy();
+    }
+    
     this.#isInitialized = false;
     this.#pendingEvents.clear();
     this.#lastProcessedClock.clear();

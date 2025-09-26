@@ -216,31 +216,6 @@ export class CircuitBreakerError extends TradingSystemError {
 }
 
 /**
- * Configuration errors
- */
-export class ConfigurationError extends TradingSystemError {
-  constructor(message, options = {}) {
-    super(message, {
-      ...options,
-      severity: 'error',
-      retryable: false,
-    });
-    this.configKey = options.configKey;
-    this.expectedType = options.expectedType;
-    this.actualValue = options.actualValue;
-  }
-
-  toStructured() {
-    return {
-      ...super.toStructured(),
-      configKey: this.configKey,
-      expectedType: this.expectedType,
-      actualValue: this.actualValue,
-    };
-  }
-}
-
-/**
  * Performance errors
  */
 export class PerformanceError extends TradingSystemError {
@@ -264,149 +239,6 @@ export class PerformanceError extends TradingSystemError {
       threshold: this.threshold,
       metrics: this.metrics,
     };
-  }
-}
-
-/**
- * Error recovery strategies
- */
-export class ErrorRecovery {
-  static strategies = {
-    RETRY: 'retry',
-    FALLBACK: 'fallback',
-    CIRCUIT_BREAK: 'circuit_break',
-    GRACEFUL_DEGRADATION: 'graceful_degradation',
-    FAIL_FAST: 'fail_fast',
-  };
-
-  /**
-   * Determine recovery strategy based on error type
-   * @param {TradingSystemError} error - Error to analyze
-   * @returns {string} Recovery strategy
-   */
-  static determineStrategy(error) {
-    if (error instanceof CircuitBreakerError) {
-      return this.strategies.CIRCUIT_BREAK;
-    }
-
-    if (error instanceof OrderValidationError) {
-      return this.strategies.FAIL_FAST;
-    }
-
-    if (error instanceof PerformanceError) {
-      return this.strategies.GRACEFUL_DEGRADATION;
-    }
-
-    if (error instanceof GrenacheServiceError) {
-      return this.strategies.FALLBACK;
-    }
-
-    if (error instanceof NetworkError && error.isRetryable()) {
-      return this.strategies.RETRY;
-    }
-
-    return this.strategies.FAIL_FAST;
-  }
-
-  /**
-   * Execute recovery strategy
-   * @param {TradingSystemError} error - Error to recover from
-   * @param {Function} operation - Operation to retry/fallback
-   * @param {Object} options - Recovery options
-   * @returns {Promise<any>} Recovery result
-   */
-  static async executeRecovery(error, operation, options = {}) {
-    const strategy = this.determineStrategy(error);
-
-    switch (strategy) {
-    case this.strategies.RETRY:
-      return this.retryOperation(operation, options);
-    case this.strategies.FALLBACK:
-      return this.fallbackOperation(operation, options);
-    case this.strategies.CIRCUIT_BREAK:
-      return this.circuitBreakOperation(error, options);
-    case this.strategies.GRACEFUL_DEGRADATION:
-      return this.gracefulDegradationOperation(operation, options);
-    case this.strategies.FAIL_FAST:
-    default:
-      throw error;
-    }
-  }
-
-  /**
-   * Retry operation with exponential backoff
-   * @param {Function} operation - Operation to retry
-   * @param {Object} options - Retry options
-   * @returns {Promise<any>} Operation result
-   */
-  static async retryOperation(operation, options = {}) {
-    const maxRetries = options.maxRetries || 3;
-    const baseDelay = options.baseDelay || 1000;
-    const maxDelay = options.maxDelay || 10000;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        return await operation();
-      } catch (error) {
-        // Check if error is retryable - handle both TradingSystemError and regular Error
-        const isRetryable = error.isRetryable ? error.isRetryable() :
-          (error instanceof TradingSystemError ? error.retryable : true);
-
-        if (attempt === maxRetries || !isRetryable) {
-          throw error;
-        }
-
-        const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-
-  /**
-   * Fallback operation
-   * @param {Function} operation - Primary operation
-   * @param {Object} options - Fallback options
-   * @returns {Promise<any>} Operation result
-   */
-  static async fallbackOperation(operation, options = {}) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (options.fallback) {
-        return await options.fallback(error);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Circuit break operation
-   * @param {TradingSystemError} error - Circuit breaker error
-   * @param {Object} options - Circuit break options
-   * @returns {Promise<any>} Operation result
-   */
-  static async circuitBreakOperation(error, options = {}) {
-    if (options.circuitBreaker) {
-      return options.circuitBreaker.execute(options.operation);
-    }
-    throw error;
-  }
-
-  /**
-   * Graceful degradation operation
-   * @param {Function} operation - Operation to degrade
-   * @param {Object} options - Degradation options
-   * @returns {Promise<any>} Operation result
-   */
-  static async gracefulDegradationOperation(operation, options = {}) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (options.degradedOperation) {
-        return await options.degradedOperation(error);
-      }
-      throw error;
-    }
   }
 }
 
@@ -494,20 +326,6 @@ export const ErrorSeverity = {
   WARNING: 'warning',
   INFO: 'info',
   DEBUG: 'debug',
-};
-
-/**
- * Error categories for classification
- */
-export const ErrorCategory = {
-  VALIDATION: 'validation',
-  NETWORK: 'network',
-  PERFORMANCE: 'performance',
-  CONFIGURATION: 'configuration',
-  BUSINESS_LOGIC: 'business_logic',
-  EXTERNAL_SERVICE: 'external_service',
-  INFRASTRUCTURE: 'infrastructure',
-  SECURITY: 'security',
 };
 
 /**

@@ -121,41 +121,5 @@ export class SecurityValidator {
     return num;
   }
 
-  /**
-   * Validate message size
-   * @param {Object} message - Message to validate
-   * @param {number} maxSize - Maximum size in bytes
-   */
-  static validateMessageSize(message, maxSize = 1024 * 1024) {
-    const size = JSON.stringify(message).length;
-    if (size > maxSize) {
-      throw new SecurityError(`Message too large: ${size} bytes (max: ${maxSize})`);
-    }
-  }
 
-  /**
-   * Sanitize log data
-   * @param {Object} data - Data to sanitize for logging
-   * @returns {Object} Sanitized data
-   */
-  static sanitizeForLogging(data) {
-    const sanitized = { ...data };
-
-    // Remove sensitive fields
-    const sensitiveFields = ['password', 'token', 'key', 'secret'];
-    sensitiveFields.forEach(field => {
-      if (sanitized[field]) {
-        sanitized[field] = '[REDACTED]';
-      }
-    });
-
-    // Truncate long strings
-    Object.keys(sanitized).forEach(key => {
-      if (typeof sanitized[key] === 'string' && sanitized[key].length > 500) {
-        sanitized[key] = sanitized[key].substring(0, 500) + '...';
-      }
-    });
-
-    return sanitized;
-  }
 }

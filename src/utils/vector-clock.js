@@ -92,24 +92,6 @@ export class VectorClock {
   }
 
   /**
-   * Check if this clock happens after another
-   * @param {VectorClock} other - Other vector clock
-   * @returns {boolean} True if this happens after other
-   */
-  happensAfter(other) {
-    return this.compare(other) === 1;
-  }
-
-  /**
-   * Check if this clock is concurrent with another
-   * @param {VectorClock} other - Other vector clock
-   * @returns {boolean} True if concurrent
-   */
-  isConcurrent(other) {
-    return this.compare(other) === null;
-  }
-
-  /**
    * Get clock as plain object
    * @returns {Object} Clock representation
    */

@@ -17,6 +17,7 @@ import {
 import { logger, LogLevel } from '../utils/logger.js';
 import config from '../utils/config.js';
 import { VectorClock } from '../utils/vector-clock.js';
+import { MultiTierRateLimiter } from '../utils/rate-limiter.js';
 
 /**
  * @typedef {Object} OrderMessage
@@ -53,6 +54,7 @@ export default class GrenacheService {
   #circuitBreaker = null;
   #logger = null;
   #vectorClock = null;
+  #rateLimiter = null;
 
   constructor(grapeUrl = null) {
     this.#nodeId = randomUUID();
@@ -73,6 +75,9 @@ export default class GrenacheService {
 
     // Initialize vector clock for distributed ordering
     this.#vectorClock = new VectorClock(this.#nodeId);
+
+    // Initialize rate limiter for P2P messages
+    this.#rateLimiter = new MultiTierRateLimiter();
   }
 
   /**
@@ -219,6 +224,17 @@ export default class GrenacheService {
       });
     }
 
+    // Rate limiting for P2P messages (only if enabled)
+    if (config.security.enableRateLimit && !this.#rateLimiter.isAllowed(this.#nodeId, 'messages')) {
+      throw new GrenacheServiceError('Rate limit exceeded: too many P2P messages', {
+        context: new ErrorContext().withOrder(order).withNetwork({ nodeId: this.#nodeId }).build(),
+        serviceName: this.#serviceName,
+        operation: 'distributeOrder',
+        severity: ErrorSeverity.WARNING,
+        retryable: true,
+      });
+    }
+
     // Update vector clock for this event
     this.#vectorClock.tick();
 
@@ -310,6 +326,11 @@ export default class GrenacheService {
       throw new Error('Grenache service not initialized');
     }
 
+    // Rate limiting for P2P messages (only if enabled)
+    if (config.security.enableRateLimit && !this.#rateLimiter.isAllowed(this.#nodeId, 'messages')) {
+      throw new Error('Rate limit exceeded: too many P2P messages');
+    }
+
     // Update vector clock for this event
     this.#vectorClock.tick();
 
@@ -344,6 +365,11 @@ export default class GrenacheService {
   async syncOrderbook(orderbook) {
     if (!this.#isInitialized) {
       throw new Error('Grenache service not initialized');
+    }
+
+    // Rate limiting for P2P messages (only if enabled)
+    if (config.security.enableRateLimit && !this.#rateLimiter.isAllowed(this.#nodeId, 'messages')) {
+      throw new Error('Rate limit exceeded: too many P2P messages');
     }
 
     // Update vector clock for this event
@@ -573,6 +599,12 @@ export default class GrenacheService {
     if (this.#link) {
       this.#link.stop();
     }
+    
+    // Destroy rate limiter
+    if (this.#rateLimiter) {
+      this.#rateLimiter.destroy();
+    }
+    
     this.#isInitialized = false;
     this.#logger.system(LogLevel.INFO, 'Grenache service destroyed', {
       nodeId: this.#nodeId,

@@ -92,6 +92,11 @@ export class MultiTierRateLimiter {
       requests: new RateLimiter({ windowMs: 1000, maxRequests: 10 }), // 10 requests/sec
       messages: new RateLimiter({ windowMs: 60000, maxRequests: 1000 }), // 1000 messages/min
     };
+    
+    // Start automatic cleanup every minute
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup();
+    }, 60000);
   }
 
   /**
@@ -134,5 +139,15 @@ export class MultiTierRateLimiter {
    */
   cleanup() {
     Object.values(this.limiters).forEach(limiter => limiter.cleanup());
+  }
+
+  /**
+   * Destroy rate limiter and clear intervals
+   */
+  destroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
   }
 }
