@@ -22,7 +22,7 @@ import { MultiTierRateLimiter } from '../utils/rate-limiter.js';
 /**
  * @typedef {Object} OrderMessage
  * @property {string} id - Message ID
- * @property {string} type - Message type ('order', 'orderbook_sync', 'trade')
+ * @property {string} type - Message type ('order', 'trade')
  * @property {string} fromNode - Source node ID
  * @property {Object} payload - Message payload
  * @property {Object} vectorClock - Vector clock for distributed ordering
@@ -49,7 +49,6 @@ export default class GrenacheService {
   #port = null;
   #isInitialized = false;
   #orderHandlers = new Set();
-  #orderbookHandlers = new Set();
   #tradeHandlers = new Set();
   #circuitBreaker = null;
   #logger = null;
@@ -176,21 +175,6 @@ export default class GrenacheService {
     this.#orderHandlers.delete(handler);
   }
 
-  /**
-   * Add orderbook handler
-   * @param {Function} handler - Orderbook handler function
-   */
-  addOrderbookHandler(handler) {
-    this.#orderbookHandlers.add(handler);
-  }
-
-  /**
-   * Remove orderbook handler
-   * @param {Function} handler - Orderbook handler function
-   */
-  removeOrderbookHandler(handler) {
-    this.#orderbookHandlers.delete(handler);
-  }
 
   /**
    * Add trade handler
@@ -357,46 +341,6 @@ export default class GrenacheService {
     }
   }
 
-  /**
-   * Sync orderbook with other nodes with circuit breaker protection
-   * @param {Object} orderbook - Orderbook snapshot
-   * @returns {Promise<boolean>} Sync success
-   */
-  async syncOrderbook(orderbook) {
-    if (!this.#isInitialized) {
-      throw new Error('Grenache service not initialized');
-    }
-
-    // Rate limiting for P2P messages (only if enabled)
-    if (config.security.enableRateLimit && !this.#rateLimiter.isAllowed(this.#nodeId, 'messages')) {
-      throw new Error('Rate limit exceeded: too many P2P messages');
-    }
-
-    // Update vector clock for this event
-    this.#vectorClock.tick();
-
-    const message = {
-      id: randomUUID(),
-      type: 'orderbook_sync',
-      fromNode: this.#nodeId,
-      payload: orderbook,
-      vectorClock: this.#vectorClock.toObject(),
-      timestamp: Date.now(),
-    };
-
-    try {
-      const result = await this.#circuitBreaker.execute(async () => {
-        return await this.#sendToAllNodes(message);
-      });
-      return result.success;
-    } catch (error) {
-      this.#logger.error(LogLevel.ERROR, 'Failed to sync orderbook', error, {
-        orderbookPair: orderbook.pair,
-        nodeId: this.#nodeId,
-      });
-      return false;
-    }
-  }
 
   /**
    * Send message to all available nodes
@@ -468,9 +412,6 @@ export default class GrenacheService {
       case 'trade':
         this.#handleTradeMessage(payload);
         break;
-      case 'orderbook_sync':
-        this.#handleOrderbookMessage(payload);
-        break;
       default:
         console.warn(`⚠️ Unknown message type: ${payload.type}`);
       }
@@ -532,28 +473,6 @@ export default class GrenacheService {
     });
   }
 
-  /**
-   * Handle orderbook message
-   * @param {OrderMessage} message - Orderbook message
-   * @private
-   */
-  #handleOrderbookMessage(message) {
-    console.log(`📊 Received orderbook sync from node ${message.fromNode}`);
-
-    // Create vector clock from message
-    const vectorClock = message.vectorClock
-      ? VectorClock.fromObject(message.fromNode, message.vectorClock)
-      : null;
-
-    // Notify all orderbook handlers with vector clock
-    this.#orderbookHandlers.forEach(handler => {
-      try {
-        handler(message.payload, vectorClock);
-      } catch (error) {
-        console.error('❌ Error in orderbook handler:', error);
-      }
-    });
-  }
 
   /**
    * Get circuit breaker status

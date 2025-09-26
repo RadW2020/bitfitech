@@ -326,16 +326,6 @@ export default class ExchangeClient {
       }
     });
 
-    // Handle orderbook sync from other nodes
-    this.#grenacheService.addOrderbookHandler((orderbook, vectorClock) => {
-      try {
-        console.log('📊 Received orderbook sync from other node');
-        // Process event with vector clock ordering
-        this.#processEventWithOrdering('orderbook_sync', { orderbook, vectorClock });
-      } catch (error) {
-        console.error('❌ Error processing orderbook sync:', error);
-      }
-    });
   }
 
   /**
@@ -434,9 +424,6 @@ export default class ExchangeClient {
     case 'trade':
       this.#processTradeEvent(eventData);
       break;
-    case 'orderbook_sync':
-      this.#processOrderbookSyncEvent(eventData);
-      break;
     default:
       console.warn(`Unknown event type: ${eventType}`);
     }
@@ -487,29 +474,6 @@ export default class ExchangeClient {
     this.#tradeHistory.push(trade);
   }
 
-  /**
-   * Process orderbook sync event
-   * @param {Object} eventData - Orderbook sync event data
-   * @private
-   */
-  #processOrderbookSyncEvent(eventData) {
-    const { orderbook } = eventData;
-
-    // Log orderbook sync details for debugging
-    console.log('📊 Processed orderbook sync event', {
-      pair: orderbook?.pair || 'unknown',
-      orderCount: orderbook?.orderCount || 0,
-      tradeCount: orderbook?.tradeCount || 0,
-      timestamp: orderbook?.timestamp || Date.now(),
-    });
-
-    // TODO: Implement orderbook merging logic
-    // In a more sophisticated implementation, we would:
-    // 1. Compare vector clocks to determine which state is newer
-    // 2. Merge conflicting orders using conflict resolution strategies
-    // 3. Update local orderbook state
-    // 4. Broadcast any changes to other nodes
-  }
 
   // Node synchronization removed - vector clocks handle event ordering
 
