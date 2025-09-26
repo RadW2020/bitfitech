@@ -105,3 +105,20 @@ src/
 │   └── grenache-service.js    # P2P communication
 └── utils/                      # Supporting utilities
 ```
+
+## JSDoc Documentation
+
+The project includes comprehensive JSDoc documentation for all classes and methods.
+
+#### Generate Documentation
+
+```bash
+# Generate JSDoc documentation
+npm run docs
+```
+
+This will create documentation in the `docs/` directory.
+
+#### View Documentation
+
+After running `npm run docs`, open `docs/index.html` in your browser to view the complete API documentation.
