@@ -48,6 +48,9 @@ npm test
 
 # Run with coverage
 npm run test:coverage
+
+# Run integration test
+npm run test:integration
 ```
 
 ## 📊 Key Features

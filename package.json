@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run test/integration/",
     "lint": "eslint src/",
     "format": "prettier --write .",
     "docs": "jsdoc -c jsdoc.config.json"

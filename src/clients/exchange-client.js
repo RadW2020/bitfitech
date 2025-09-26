@@ -8,6 +8,7 @@ import GrenacheService from '../services/grenache-service.js';
 import { randomUUID } from 'node:crypto';
 import config from '../utils/config.js';
 import { MultiTierRateLimiter } from '../utils/rate-limiter.js';
+import { VectorClock } from '../utils/vector-clock.js';
 
 /**
  * @typedef {Object} ExchangeConfig
@@ -39,6 +40,8 @@ export default class ExchangeClient {
   #orderHistory = new Map();
   #tradeHistory = [];
   #rateLimiter = new MultiTierRateLimiter();
+  #pendingEvents = new Map(); // For event ordering
+  #lastProcessedClock = new Map(); // Track last processed vector clock per node
 
   constructor(clientConfig) {
     this.#config = {
@@ -305,31 +308,8 @@ export default class ExchangeClient {
       try {
         console.log(`📨 Processing order from other node: ${order.id}`);
 
-        // Add order to local orderbook with vector clock
-        const matchResult = await this.#orderbook.addOrder(order, vectorClock);
-
-        // Store order in history
-        if (matchResult.remainingOrder) {
-          this.#orderHistory.set(matchResult.remainingOrder.id, {
-            ...matchResult.remainingOrder,
-            localTrades: matchResult.trades,
-            timestamp: Date.now(),
-          });
-        }
-
-        // Store trades in history
-        this.#tradeHistory.push(...matchResult.trades);
-
-        // Broadcast trades to other nodes
-        for (const trade of matchResult.trades) {
-          try {
-            await this.#grenacheService.broadcastTrade(trade);
-          } catch (error) {
-            console.error('❌ Failed to broadcast trade:', error);
-          }
-        }
-
-        console.log(`✅ Processed order ${order.id} with ${matchResult.trades.length} trades`);
+        // Process event with vector clock ordering
+        await this.#processEventWithOrdering('order', { order, vectorClock });
       } catch (error) {
         console.error('❌ Error processing order from other node:', error);
       }
@@ -339,7 +319,8 @@ export default class ExchangeClient {
     this.#grenacheService.addTradeHandler((trade, vectorClock) => {
       try {
         console.log(`💰 Received trade from other node: ${trade.id}`);
-        this.#tradeHistory.push(trade);
+        // Process event with vector clock ordering
+        this.#processEventWithOrdering('trade', { trade, vectorClock });
       } catch (error) {
         console.error('❌ Error processing trade from other node:', error);
       }
@@ -349,12 +330,173 @@ export default class ExchangeClient {
     this.#grenacheService.addOrderbookHandler((orderbook, vectorClock) => {
       try {
         console.log('📊 Received orderbook sync from other node');
-        // In a more sophisticated implementation, we might merge orderbooks
-        // For now, we just log the sync
+        // Process event with vector clock ordering
+        this.#processEventWithOrdering('orderbook_sync', { orderbook, vectorClock });
       } catch (error) {
         console.error('❌ Error processing orderbook sync:', error);
       }
     });
+  }
+
+  /**
+   * Process event with vector clock ordering
+   * @param {string} eventType - Type of event
+   * @param {Object} eventData - Event data with vector clock
+   * @private
+   */
+  async #processEventWithOrdering(eventType, eventData) {
+    const { vectorClock } = eventData;
+
+    if (!vectorClock) {
+      // No vector clock, process immediately
+      await this.#processEvent(eventType, eventData);
+      return;
+    }
+
+    const nodeId = vectorClock.nodeId;
+    const eventId = `${nodeId}-${Date.now()}-${Math.random()}`;
+
+    // Store event for ordering
+    this.#pendingEvents.set(eventId, { eventType, eventData, timestamp: Date.now() });
+
+    // Try to process pending events
+    await this.#processPendingEvents();
+  }
+
+  /**
+   * Process pending events in correct order
+   * @private
+   */
+  async #processPendingEvents() {
+    const events = Array.from(this.#pendingEvents.entries());
+
+    // Sort events by vector clock
+    events.sort(([, a], [, b]) => {
+      const clockA = a.eventData.vectorClock;
+      const clockB = b.eventData.vectorClock;
+
+      if (!clockA || !clockB) return 0;
+
+      const vcA = new VectorClock(clockA.nodeId, clockA.clock);
+      const vcB = new VectorClock(clockB.nodeId, clockB.clock);
+
+      if (vcA.happensBefore(vcB)) return -1;
+      if (vcB.happensBefore(vcA)) return 1;
+      return 0;
+    });
+
+    // Process events in order
+    for (const [eventId, event] of events) {
+      const { eventType, eventData } = event;
+      const vectorClock = eventData.vectorClock;
+
+      if (vectorClock) {
+        const nodeId = vectorClock.nodeId;
+        const lastClock = this.#lastProcessedClock.get(nodeId);
+
+        // Check if we can process this event
+        if (lastClock) {
+          const vcLast = new VectorClock(nodeId, lastClock);
+          const vcCurrent = new VectorClock(nodeId, vectorClock.clock);
+
+          if (!vcLast.happensBefore(vcCurrent)) {
+            // Can't process yet, wait for missing events
+            continue;
+          }
+        }
+
+        // Process the event
+        await this.#processEvent(eventType, eventData);
+
+        // Update last processed clock
+        this.#lastProcessedClock.set(nodeId, vectorClock.clock);
+      } else {
+        // No vector clock, process immediately
+        await this.#processEvent(eventType, eventData);
+      }
+
+      // Remove processed event
+      this.#pendingEvents.delete(eventId);
+    }
+  }
+
+  /**
+   * Process a single event
+   * @param {string} eventType - Type of event
+   * @param {Object} eventData - Event data
+   * @private
+   */
+  async #processEvent(eventType, eventData) {
+    switch (eventType) {
+      case 'order':
+        await this.#processOrderEvent(eventData);
+        break;
+      case 'trade':
+        this.#processTradeEvent(eventData);
+        break;
+      case 'orderbook_sync':
+        this.#processOrderbookSyncEvent(eventData);
+        break;
+      default:
+        console.warn(`Unknown event type: ${eventType}`);
+    }
+  }
+
+  /**
+   * Process order event
+   * @param {Object} eventData - Order event data
+   * @private
+   */
+  async #processOrderEvent(eventData) {
+    const { order } = eventData;
+
+    // Add order to local orderbook
+    const matchResult = await this.#orderbook.addOrder(order);
+
+    // Store order in history
+    if (matchResult.remainingOrder) {
+      this.#orderHistory.set(matchResult.remainingOrder.id, {
+        ...matchResult.remainingOrder,
+        localTrades: matchResult.trades,
+        timestamp: Date.now(),
+      });
+    }
+
+    // Store trades in history
+    this.#tradeHistory.push(...matchResult.trades);
+
+    // Broadcast trades to other nodes
+    for (const trade of matchResult.trades) {
+      try {
+        await this.#grenacheService.broadcastTrade(trade);
+      } catch (error) {
+        console.error('❌ Failed to broadcast trade:', error);
+      }
+    }
+
+    console.log(`✅ Processed order ${order.id} with ${matchResult.trades.length} trades`);
+  }
+
+  /**
+   * Process trade event
+   * @param {Object} eventData - Trade event data
+   * @private
+   */
+  #processTradeEvent(eventData) {
+    const { trade } = eventData;
+    this.#tradeHistory.push(trade);
+  }
+
+  /**
+   * Process orderbook sync event
+   * @param {Object} eventData - Orderbook sync event data
+   * @private
+   */
+  #processOrderbookSyncEvent(eventData) {
+    const { orderbook } = eventData;
+    // In a more sophisticated implementation, we might merge orderbooks
+    // For now, we just log the sync
+    console.log('📊 Processed orderbook sync event');
   }
 
   /**
@@ -382,13 +524,32 @@ export default class ExchangeClient {
   }
 
   /**
-   * Destroy the exchange client
+   * Get vector clock status for debugging
+   * @returns {Object} Vector clock status
    */
+  getVectorClockStatus() {
+    return {
+      nodeId: this.#userId,
+      vectorClock: this.#grenacheService.getVectorClock(),
+      pendingEvents: this.#pendingEvents.size,
+      lastProcessedClocks: Object.fromEntries(this.#lastProcessedClock),
+    };
+  }
+
+  /**
+   * Force process pending events (for testing)
+   */
+  async forceProcessPendingEvents() {
+    await this.#processPendingEvents();
+  }
+
   destroy() {
     if (this.#grenacheService) {
       this.#grenacheService.destroy();
     }
     this.#isInitialized = false;
+    this.#pendingEvents.clear();
+    this.#lastProcessedClock.clear();
     console.log('🛑 Exchange client destroyed');
   }
 }
