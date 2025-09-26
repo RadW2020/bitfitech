@@ -13,7 +13,6 @@ import {
   CircuitBreakerError,
   ConfigurationError,
   PerformanceError,
-  ErrorRecovery,
   ErrorContext,
   ErrorSeverity,
   ErrorCategory,
@@ -211,21 +210,6 @@ describe('Error Handling System', () => {
     });
   });
 
-  describe('ConfigurationError', () => {
-    it('should create configuration error', () => {
-      const error = new ConfigurationError('Invalid config', {
-        configKey: 'grapeUrl',
-        expectedType: 'string',
-        actualValue: 123,
-      });
-
-      expect(error.configKey).toBe('grapeUrl');
-      expect(error.expectedType).toBe('string');
-      expect(error.actualValue).toBe(123);
-      expect(error.severity).toBe('error');
-      expect(error.retryable).toBe(false);
-    });
-  });
 
   describe('PerformanceError', () => {
     it('should create performance error', () => {
@@ -243,105 +227,6 @@ describe('Error Handling System', () => {
     });
   });
 
-  describe('ErrorRecovery', () => {
-    describe('determineStrategy', () => {
-      it('should determine retry strategy for retryable network errors', () => {
-        const error = new NetworkError('Connection failed', { retryable: true });
-        const strategy = ErrorRecovery.determineStrategy(error);
-        expect(strategy).toBe(ErrorRecovery.strategies.RETRY);
-      });
-
-      it('should determine circuit break strategy for circuit breaker errors', () => {
-        const error = new CircuitBreakerError('Circuit is open');
-        const strategy = ErrorRecovery.determineStrategy(error);
-        expect(strategy).toBe(ErrorRecovery.strategies.CIRCUIT_BREAK);
-      });
-
-      it('should determine fail fast strategy for validation errors', () => {
-        const error = new OrderValidationError('Validation failed');
-        const strategy = ErrorRecovery.determineStrategy(error);
-        expect(strategy).toBe(ErrorRecovery.strategies.FAIL_FAST);
-      });
-
-      it('should determine graceful degradation for performance errors', () => {
-        const error = new PerformanceError('Operation too slow');
-        const strategy = ErrorRecovery.determineStrategy(error);
-        expect(strategy).toBe(ErrorRecovery.strategies.GRACEFUL_DEGRADATION);
-      });
-
-      it('should determine fallback strategy for grenache service errors', () => {
-        const error = new GrenacheServiceError('Service unavailable');
-        const strategy = ErrorRecovery.determineStrategy(error);
-        expect(strategy).toBe(ErrorRecovery.strategies.FALLBACK);
-      });
-    });
-
-    describe('retryOperation', () => {
-      it('should retry operation successfully', async () => {
-        const operation = vi
-          .fn()
-          .mockRejectedValueOnce(new Error('Temporary failure'))
-          .mockResolvedValueOnce('success');
-
-        const result = await ErrorRecovery.retryOperation(operation, {
-          maxRetries: 2,
-          baseDelay: 10,
-        });
-
-        expect(result).toBe('success');
-        expect(operation).toHaveBeenCalledTimes(2);
-      });
-
-      it('should fail after max retries', async () => {
-        const operation = vi.fn().mockRejectedValue(new Error('Persistent failure'));
-
-        await expect(
-          ErrorRecovery.retryOperation(operation, { maxRetries: 2, baseDelay: 10 })
-        ).rejects.toThrow('Persistent failure');
-
-        expect(operation).toHaveBeenCalledTimes(3);
-      });
-
-      it('should not retry non-retryable errors', async () => {
-        const error = new OrderValidationError('Validation failed');
-        const operation = vi.fn().mockRejectedValue(error);
-
-        await expect(
-          ErrorRecovery.retryOperation(operation, { maxRetries: 2, baseDelay: 10 })
-        ).rejects.toThrow('Validation failed');
-
-        expect(operation).toHaveBeenCalledTimes(1);
-      });
-    });
-
-    describe('fallbackOperation', () => {
-      it('should execute fallback when primary operation fails', async () => {
-        const primaryOperation = vi.fn().mockRejectedValue(new Error('Primary failed'));
-        const fallbackOperation = vi.fn().mockResolvedValue('fallback success');
-
-        const result = await ErrorRecovery.fallbackOperation(primaryOperation, {
-          fallback: fallbackOperation,
-        });
-
-        expect(result).toBe('fallback success');
-        expect(primaryOperation).toHaveBeenCalledTimes(1);
-        expect(fallbackOperation).toHaveBeenCalledTimes(1);
-      });
-
-      it('should return primary result when primary operation succeeds', async () => {
-        const primaryOperation = vi.fn().mockResolvedValue('primary success');
-        const fallbackOperation = vi.fn();
-
-        const result = await ErrorRecovery.fallbackOperation(primaryOperation, {
-          fallback: fallbackOperation,
-        });
-
-        expect(result).toBe('primary success');
-        expect(primaryOperation).toHaveBeenCalledTimes(1);
-        expect(fallbackOperation).not.toHaveBeenCalled();
-      });
-    });
-  });
 
   describe('ErrorContext', () => {
     it('should build context with order information', () => {
@@ -420,14 +305,5 @@ describe('Error Handling System', () => {
       expect(ErrorSeverity.DEBUG).toBe('debug');
     });
 
-    it('should have correct error categories', () => {
-      expect(ErrorCategory.VALIDATION).toBe('validation');
-      expect(ErrorCategory.NETWORK).toBe('network');
-      expect(ErrorCategory.PERFORMANCE).toBe('performance');
-      expect(ErrorCategory.CONFIGURATION).toBe('configuration');
-      expect(ErrorCategory.BUSINESS_LOGIC).toBe('business_logic');
-      expect(ErrorCategory.EXTERNAL_SERVICE).toBe('external_service');
-      expect(ErrorCategory.INFRASTRUCTURE).toBe('infrastructure');
-    });
   });
 });

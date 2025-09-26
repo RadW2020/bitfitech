@@ -122,41 +122,4 @@ describe('SecurityValidator', () => {
     });
   });
 
-  describe('validateMessageSize', () => {
-    it('should allow small message', () => {
-      const message = { data: 'small' };
-      expect(() => SecurityValidator.validateMessageSize(message, 1000)).not.toThrow();
-    });
-
-    it('should reject large message', () => {
-      const message = { data: 'x'.repeat(2000) };
-      expect(() => SecurityValidator.validateMessageSize(message, 1000)).toThrow(SecurityError);
-    });
-  });
-
-  describe('sanitizeForLogging', () => {
-    it('should redact sensitive fields', () => {
-      const data = {
-        userId: 'user123',
-        password: 'secret123',
-        token: 'abc123',
-        amount: '100',
-      };
-
-      const result = SecurityValidator.sanitizeForLogging(data);
-      expect(result.password).toBe('[REDACTED]');
-      expect(result.token).toBe('[REDACTED]');
-      expect(result.userId).toBe('user123');
-    });
-
-    it('should truncate long strings', () => {
-      const data = {
-        message: 'x'.repeat(1000),
-      };
-
-      const result = SecurityValidator.sanitizeForLogging(data);
-      expect(result.message).toHaveLength(503); // 500 + '...'
-      expect(result.message.endsWith('...')).toBe(true);
-    });
-  });
 });

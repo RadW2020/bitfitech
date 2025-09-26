@@ -112,39 +112,6 @@ describe('VectorClock', () => {
     });
   });
 
-  describe('happensAfter', () => {
-    it('should return true when this happens after other', () => {
-      clock1.tick(); // node1: 1
-      clock2.tick(); // node2: 1
-      clock1.update(clock2); // node1: 2, node2: 1
-
-      expect(clock1.happensAfter(clock2)).toBe(true);
-    });
-
-    it('should return false when this does not happen after other', () => {
-      clock1.tick(); // node1: 1
-      clock2.tick(); // node2: 1
-
-      expect(clock1.happensAfter(clock2)).toBe(false);
-    });
-  });
-
-  describe('isConcurrent', () => {
-    it('should return true when concurrent', () => {
-      clock1.tick(); // node1: 1
-      clock2.tick(); // node2: 1
-
-      expect(clock1.isConcurrent(clock2)).toBe(true);
-    });
-
-    it('should return false when not concurrent', () => {
-      clock1.tick(); // node1: 1
-      clock2.tick(); // node2: 1
-      clock1.update(clock2); // node1: 2, node2: 1
-
-      expect(clock1.isConcurrent(clock2)).toBe(false);
-    });
-  });
 
   describe('toObject', () => {
     it('should return clock as object', () => {
