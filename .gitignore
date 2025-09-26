@@ -1,0 +1,11 @@
+context
+
+.DS_Store
+.claude
+node_modules
+coverage
+
+# Generated documentation (regenerate with npm run docs)
+docs/
+!docs/README.md
+

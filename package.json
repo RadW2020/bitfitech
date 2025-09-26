@@ -1,0 +1,53 @@
+{
+  "name": "bitfinex-p2p-exchange",
+  "version": "1.0.0",
+  "description": "P2P Distributed Exchange for Bitfinex Technical Challenge",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.5"
+  },
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "start:client": "node src/client.js",
+    "start:grapes": "node scripts/start-grapes.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test",
+    "lint": "eslint src/",
+    "format": "prettier --write .",
+    "docs": "jsdoc -c jsdoc.config.json"
+  },
+  "keywords": [
+    "p2p",
+    "exchange",
+    "trading",
+    "grenache",
+    "distributed",
+    "orderbook"
+  ],
+  "author": "Raul JM",
+  "license": "MIT",
+  "dependencies": {
+    "grenache-nodejs-http": "^1.0.1",
+    "grenache-nodejs-link": "^1.0.2"
+  },
+  "devDependencies": {
+    "eslint": "^9.36.0",
+    "jsdoc": "^4.0.4",
+    "prettier": "^3.6.2"
+  },
+  "exports": {
+    ".": {
+      "import": "./src/index.js"
+    },
+    "./orderbook": {
+      "import": "./src/orderbook.js"
+    },
+    "./grenache-service": {
+      "import": "./src/grenache-service.js"
+    },
+    "./exchange-client": {
+      "import": "./src/exchange-client.js"
+    }
+  }
+}
