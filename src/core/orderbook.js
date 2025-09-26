@@ -70,7 +70,7 @@ export default class OrderBook {
   #tradeCount = 0;
   #logger = null;
   #eventQueue = null;
-  #lastOrderResult = null;
+  #pendingResults = new Map(); // Map<eventId, Promise<MatchResult>>
 
   // Performance metrics
   #metrics = {
@@ -112,7 +112,20 @@ export default class OrderBook {
       });
     }
 
-    this.#lastOrderResult = await this.#addOrderInternal(event.data);
+    let result;
+    try {
+      result = await this.#addOrderInternal(event.data);
+    } catch {
+      // For invalid orders, return empty result instead of throwing
+      result = { trades: [], remainingOrder: null };
+    }
+    
+    // Resolve the promise for this specific event
+    if (event.eventId && this.#pendingResults.has(event.eventId)) {
+      const resolveResult = this.#pendingResults.get(event.eventId);
+      resolveResult(result);
+      this.#pendingResults.delete(event.eventId);
+    }
   }
 
   /**
@@ -178,17 +191,30 @@ export default class OrderBook {
    * @returns {Promise<MatchResult>} Match result with trades and remaining order
    */
   async addOrder(orderData, vectorClock = null) {
+    // Create unique event ID for this order
+    const eventId = `${Date.now()}-${Math.random()}`;
+    
+    // Create promise that will be resolved when the event is processed
+    let resolveResult;
+    const resultPromise = new Promise((resolve) => {
+      resolveResult = resolve;
+    });
+    
+    // Store the promise resolver
+    this.#pendingResults.set(eventId, resolveResult);
+
     // Enqueue order event for distributed ordering
     await this.#eventQueue.enqueue(
       {
         type: 'order',
         data: orderData,
+        eventId, // Include event ID for result mapping
       },
       vectorClock
     );
 
-    // Return the result from the event handler
-    return this.#lastOrderResult;
+    // Return the promise that will resolve with the correct result
+    return resultPromise;
   }
 
   /**

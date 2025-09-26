@@ -287,6 +287,26 @@ class TradingLogger {
   }
 
   /**
+   * Log info level message
+   * @param {string} level - Log level
+   * @param {string} message - Log message
+   * @param {Object} context - Additional context
+   */
+  info(level, message, context = {}) {
+    this.logger[level](context, message);
+  }
+
+  /**
+   * Log debug level message
+   * @param {string} level - Log level
+   * @param {string} message - Log message
+   * @param {Object} context - Additional context
+   */
+  debug(level, message, context = {}) {
+    this.logger[level](context, message);
+  }
+
+  /**
    * Create child logger with additional context
    * @param {Object} context - Additional context for child logger
    * @returns {TradingLogger} Child logger instance
