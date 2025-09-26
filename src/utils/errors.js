@@ -285,10 +285,6 @@ export class ErrorRecovery {
    * @returns {string} Recovery strategy
    */
   static determineStrategy(error) {
-    if (error instanceof NetworkError && error.isRetryable()) {
-      return this.strategies.RETRY;
-    }
-
     if (error instanceof CircuitBreakerError) {
       return this.strategies.CIRCUIT_BREAK;
     }
@@ -303,6 +299,10 @@ export class ErrorRecovery {
 
     if (error instanceof GrenacheServiceError) {
       return this.strategies.FALLBACK;
+    }
+
+    if (error instanceof NetworkError && error.isRetryable()) {
+      return this.strategies.RETRY;
     }
 
     return this.strategies.FAIL_FAST;
@@ -348,7 +348,11 @@ export class ErrorRecovery {
       try {
         return await operation();
       } catch (error) {
-        if (attempt === maxRetries || !error.isRetryable()) {
+        // Check if error is retryable - handle both TradingSystemError and regular Error
+        const isRetryable = error.isRetryable ? error.isRetryable() :
+                           (error instanceof TradingSystemError ? error.retryable : true);
+
+        if (attempt === maxRetries || !isRetryable) {
           throw error;
         }
 

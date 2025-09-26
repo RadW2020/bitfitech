@@ -12,7 +12,7 @@ describe('CircuitBreaker', () => {
     circuitBreaker = new CircuitBreaker({
       name: 'test-circuit',
       failureThreshold: 3,
-      resetTimeout: 1000, // 1 second for testing
+      resetTimeout: 100, // 100ms for faster testing
     });
   });
 
@@ -130,7 +130,7 @@ describe('CircuitBreaker', () => {
       expect(circuitBreaker.isOpen()).toBe(true);
 
       // Wait for reset timeout
-      await new Promise(resolve => setTimeout(resolve, 1100));
+      await new Promise(resolve => setTimeout(resolve, 150));
 
       // Try to execute operation (should transition to HALF_OPEN)
       const operation = vi.fn().mockResolvedValue('success');
@@ -151,7 +151,7 @@ describe('CircuitBreaker', () => {
       }
 
       // Wait for reset timeout
-      await new Promise(resolve => setTimeout(resolve, 1100));
+      await new Promise(resolve => setTimeout(resolve, 150));
 
       // Execute successful operations in HALF_OPEN state
       const successOperation = vi.fn().mockResolvedValue('success');
@@ -175,7 +175,7 @@ describe('CircuitBreaker', () => {
       }
 
       // Wait for reset timeout
-      await new Promise(resolve => setTimeout(resolve, 1100));
+      await new Promise(resolve => setTimeout(resolve, 150));
 
       // Execute failing operation in HALF_OPEN state
       try {
@@ -196,7 +196,7 @@ describe('CircuitBreaker', () => {
       expect(status).toHaveProperty('state', CircuitBreaker.STATES.CLOSED);
       expect(status).toHaveProperty('failureCount', 0);
       expect(status).toHaveProperty('failureThreshold', 3);
-      expect(status).toHaveProperty('resetTimeout', 1000);
+      expect(status).toHaveProperty('resetTimeout', 100);
     });
 
     it('should provide metrics information', async () => {

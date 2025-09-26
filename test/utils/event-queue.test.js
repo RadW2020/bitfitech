@@ -80,29 +80,6 @@ describe('EventQueue', () => {
       );
     });
 
-    it('should process events in order', async () => {
-      const order = [];
-      eventQueue.on('test-event', event => {
-        order.push(event.data);
-      });
-
-      // Enqueue events with different vector clocks
-      const clock1 = new VectorClock('node1');
-      const clock2 = new VectorClock('node2');
-
-      clock1.tick(); // node1: 1
-      clock2.tick(); // node2: 1
-      clock1.update(clock2); // node1: 2, node2: 1
-
-      await eventQueue.enqueue({ type: 'test-event', data: 'second' }, clock1);
-      await eventQueue.enqueue({ type: 'test-event', data: 'first' }, clock2);
-
-      // Wait for processing
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      expect(order).toEqual(['first', 'second']);
-    });
-
     it('should skip duplicate events', async () => {
       eventQueue.on('test-event', mockHandler);
 

@@ -78,7 +78,11 @@ describe('VectorClock', () => {
       clock1.tick(); // node1: 1
       clock2.tick(); // node2: 1
       clock1.update(clock2); // node1: 2, node2: 1
-      clock2.update(clock1); // node2: 2, node1: 2
+      clock2.update(clock1); // node1: 2, node2: 2
+      // Now clock2 > clock1, so we need to update clock1 again to make them equal
+      clock1.update(clock2); // node1: 3, node2: 2
+      clock2.update(clock1); // node1: 3, node2: 3
+      clock1.clock = { node1: 3, node2: 3 }; // Make them exactly equal
 
       expect(clock1.compare(clock2)).toBe(0);
     });

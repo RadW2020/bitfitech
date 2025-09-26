@@ -110,11 +110,19 @@ describe('Configuration', () => {
 
   describe('constructor', () => {
     it('should create configuration with default values', () => {
+      // Save original NODE_ENV
+      const originalNodeEnv = process.env.NODE_ENV;
+      // Set to undefined to test default values
+      delete process.env.NODE_ENV;
+
       const config = new Configuration();
       expect(config.environment).toBe('development');
       expect(config.logging.level).toBe('debug');
       expect(config.grenache.url).toBe('http://127.0.0.1:30001');
       expect(config.exchange.pair).toBe('BTC/USD');
+
+      // Restore NODE_ENV
+      process.env.NODE_ENV = originalNodeEnv;
     });
 
     it('should use environment variables when available', () => {
@@ -138,8 +146,8 @@ describe('Configuration', () => {
     });
 
     it('should validate number ranges', () => {
-      process.env.PERFORMANCE_THRESHOLD_MS = '10000';
-      expect(() => new Configuration()).toThrow('Number 10000 is out of range [1, 10000]');
+      process.env.PERFORMANCE_THRESHOLD_MS = '10001'; // Should be outside the range
+      expect(() => new Configuration()).toThrow('Number 10001 is out of range [1, 10000]');
     });
   });
 
