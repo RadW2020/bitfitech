@@ -32,15 +32,6 @@ npm run start:client client1
 npm run start:client client2
 ```
 
-## ✅ Challenge Requirements Met
-
-- ✅ **P2P Architecture**: Each client has own orderbook instance
-- ✅ **Grenache Communication**: Order distribution between nodes
-- ✅ **Order Matching**: Simple matching engine with price-time priority
-- ✅ **JavaScript**: Modern ES modules implementation
-- ✅ **No UI/HTTP API**: Console-based interface
-- ✅ **Remainder Handling**: Unmatched portions stay in orderbook
-
 ## 🔧 How It Works
 
 1. **Order Placement**: Client submits order to local orderbook
@@ -115,8 +106,4 @@ The project includes comprehensive JSDoc documentation for all classes and metho
 npm run docs
 ```
 
-This will create documentation in the `docs/` directory.
-
-#### View Documentation
-
-After running `npm run docs`, open `docs/index.html` in your browser to view the complete API documentation.
+This will create documentation in the `docs/` directory. Open `docs/index.html` in your browser to view the complete API documentation.
