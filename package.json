@@ -10,7 +10,6 @@
   "scripts": {
     "start": "node src/index.js",
     "start:client": "node src/clients/example-client.js",
-    "start:grapes": "node scripts/start-grapes.js",
     "dev": "node --watch src/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
