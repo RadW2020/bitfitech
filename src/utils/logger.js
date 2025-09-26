@@ -1,25 +1,14 @@
 /**
- * @fileoverview Enterprise Logging System
- * Structured logging with Pino for financial trading systems
- *
- * Features:
- * - Structured JSON logging
- * - File rotation and management
- * - Performance logging
- * - Error correlation
- * - Configurable log levels
+ * @fileoverview Simple Logging System
+ * Structured logging with Pino
  *
  * @author Raul JM
  */
 
 import pino from 'pino';
 import { mkdirSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import config from './config.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 /**
  * Log levels for the trading system
@@ -47,7 +36,7 @@ export const LogCategory = {
 };
 
 /**
- * Enterprise Logger class for financial trading systems
+ * Simple Logger class
  */
 class TradingLogger {
   constructor(options = {}) {
@@ -361,62 +350,5 @@ export function createLogger(options = {}) {
  * Default logger instance
  */
 export const logger = createLogger();
-
-/**
- * Log rotation utility (simple file-based rotation)
- */
-export class LogRotator {
-  constructor(logDir, maxFiles = null, maxSize = null) {
-    this.logDir = logDir;
-    this.maxFiles = maxFiles || config.logging.maxFiles;
-    this.maxSize = maxSize || config.logging.maxSizeMB * 1024 * 1024;
-  }
-
-  /**
-   * Check if log rotation is needed
-   * @param {string} logFile - Log file path
-   * @returns {boolean} Whether rotation is needed
-   */
-  needsRotation(logFile) {
-    try {
-      const stats = require('node:fs').statSync(logFile);
-      return stats.size > this.maxSize;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  /**
-   * Rotate log file
-   * @param {string} logFile - Log file path
-   */
-  rotate(logFile) {
-    const fs = require('node:fs');
-    const path = require('node:path');
-
-    try {
-      // Move existing files
-      for (let i = this.maxFiles - 1; i > 0; i--) {
-        const oldFile = `${logFile}.${i}`;
-        const newFile = `${logFile}.${i + 1}`;
-
-        if (fs.existsSync(oldFile)) {
-          if (i === this.maxFiles - 1) {
-            fs.unlinkSync(oldFile); // Delete oldest
-          } else {
-            fs.renameSync(oldFile, newFile);
-          }
-        }
-      }
-
-      // Move current log to .1
-      if (fs.existsSync(logFile)) {
-        fs.renameSync(logFile, `${logFile}.1`);
-      }
-    } catch (error) {
-      console.error('Log rotation failed:', error);
-    }
-  }
-}
 
 export default TradingLogger;

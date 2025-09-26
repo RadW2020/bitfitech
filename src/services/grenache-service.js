@@ -441,20 +441,20 @@ export default class GrenacheService {
 
       // Route message to appropriate handlers
       switch (payload.type) {
-        case 'order':
-          this.#handleOrderMessage(payload);
-          break;
-        case 'trade':
-          this.#handleTradeMessage(payload);
-          break;
-        case 'orderbook_sync':
-          this.#handleOrderbookMessage(payload);
-          break;
-        case 'sync_request':
-          this.#handleSyncRequest(payload, handler);
-          break;
-        default:
-          console.warn(`⚠️ Unknown message type: ${payload.type}`);
+      case 'order':
+        this.#handleOrderMessage(payload);
+        break;
+      case 'trade':
+        this.#handleTradeMessage(payload);
+        break;
+      case 'orderbook_sync':
+        this.#handleOrderbookMessage(payload);
+        break;
+      case 'sync_request':
+        this.#handleSyncRequest(payload, handler);
+        break;
+      default:
+        console.warn(`⚠️ Unknown message type: ${payload.type}`);
       }
 
       handler.reply(null, {
