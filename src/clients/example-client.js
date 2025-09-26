@@ -5,6 +5,7 @@
 
 import ExchangeClient from './exchange-client.js';
 import { setTimeout } from 'node:timers/promises';
+import config from '../utils/config.js';
 
 /**
  * Example client that demonstrates the P2P exchange functionality
@@ -16,8 +17,8 @@ class ExampleClient {
   constructor(userId) {
     this.#userId = userId;
     this.#exchange = new ExchangeClient({
-      grapeUrl: 'http://127.0.0.1:30001',
-      pair: 'BTC/USD',
+      grapeUrl: config.grenache.url,
+      pair: config.exchange.pair,
       userId: this.#userId,
     });
   }

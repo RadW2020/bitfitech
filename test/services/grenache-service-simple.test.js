@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import GrenacheService from '../src/grenache-service.js';
+import GrenacheService from '../../src/services/grenache-service.js';
 
 // Mock grenache modules completely
 vi.mock('grenache-nodejs-http', () => ({

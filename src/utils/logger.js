@@ -16,6 +16,7 @@ import pino from 'pino';
 import { mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import config from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -51,11 +52,11 @@ export const LogCategory = {
 class TradingLogger {
   constructor(options = {}) {
     this.options = {
-      level: options.level || process.env.LOG_LEVEL || 'info',
-      environment: options.environment || process.env.NODE_ENV || 'development',
+      level: options.level || config.logging.level,
+      environment: options.environment || config.environment,
       service: options.service || 'p2p-exchange',
       nodeId: options.nodeId || 'unknown',
-      logDir: options.logDir || join(__dirname, '../logs'),
+      logDir: options.logDir || config.logging.directory,
       ...options,
     };
 
@@ -365,11 +366,10 @@ export const logger = createLogger();
  * Log rotation utility (simple file-based rotation)
  */
 export class LogRotator {
-  constructor(logDir, maxFiles = 10, maxSize = 10 * 1024 * 1024) {
-    // 10MB default
+  constructor(logDir, maxFiles = null, maxSize = null) {
     this.logDir = logDir;
-    this.maxFiles = maxFiles;
-    this.maxSize = maxSize;
+    this.maxFiles = maxFiles || config.logging.maxFiles;
+    this.maxSize = maxSize || config.logging.maxSizeMB * 1024 * 1024;
   }
 
   /**

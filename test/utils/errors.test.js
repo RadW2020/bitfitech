@@ -17,7 +17,7 @@ import {
   ErrorContext,
   ErrorSeverity,
   ErrorCategory,
-} from '../src/utils/errors.js';
+} from '../../src/utils/errors.js';
 
 describe('Error Handling System', () => {
   describe('TradingSystemError', () => {

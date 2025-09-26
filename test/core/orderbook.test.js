@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import OrderBook from '../src/core/orderbook.js';
+import OrderBook from '../../src/core/orderbook.js';
 
 describe('OrderBook', () => {
   let orderbook;

@@ -3,7 +3,8 @@
  * @author Raul JM
  */
 
-import ExchangeClient from './exchange-client.js';
+import ExchangeClient from './clients/exchange-client.js';
+import config from './utils/config.js';
 
 /**
  * Main function to start the exchange client
@@ -14,8 +15,8 @@ async function main() {
 
     // Create exchange client
     const exchange = new ExchangeClient({
-      grapeUrl: 'http://127.0.0.1:30001',
-      pair: 'BTC/USD',
+      grapeUrl: config.grenache.url,
+      pair: config.exchange.pair,
       userId: 'user_' + Math.random().toString(36).substr(2, 9),
     });
 
@@ -26,6 +27,8 @@ async function main() {
     console.log(`👤 User ID: ${exchange.userId}`);
     console.log(`💱 Trading Pair: ${exchange.pair}`);
     console.log(`🔗 Node ID: ${exchange.grenacheService.nodeId}`);
+    console.log(`🌍 Environment: ${config.environment}`);
+    console.log(`📊 Log Level: ${config.logging.level}`);
     console.log('🔄 Exchange client running... Press Ctrl+C to exit');
 
     // Graceful shutdown

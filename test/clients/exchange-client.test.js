@@ -3,9 +3,9 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import ExchangeClient from '../src/clients/exchange-client.js';
-import OrderBook from '../src/core/orderbook.js';
-import GrenacheService from '../src/services/grenache-service.js';
+import ExchangeClient from '../../src/clients/exchange-client.js';
+import OrderBook from '../../src/core/orderbook.js';
+import GrenacheService from '../../src/services/grenache-service.js';
 
 // Mock dependencies
 vi.mock('../src/core/orderbook.js');

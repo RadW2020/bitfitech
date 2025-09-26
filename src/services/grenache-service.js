@@ -6,7 +6,7 @@
 import { PeerRPCServer, PeerRPCClient } from 'grenache-nodejs-http';
 import Link from 'grenache-nodejs-link';
 import { randomUUID } from 'node:crypto';
-import CircuitBreaker from './circuit-breaker.js';
+import CircuitBreaker from '../utils/circuit-breaker.js';
 import {
   NetworkError,
   GrenacheServiceError,
@@ -14,8 +14,9 @@ import {
   ErrorRecovery,
   ErrorContext,
   ErrorSeverity,
-} from './errors.js';
-import { logger, LogLevel } from './logger.js';
+} from '../utils/errors.js';
+import { logger, LogLevel } from '../utils/logger.js';
+import config from '../utils/config.js';
 
 /**
  * @typedef {Object} OrderMessage
@@ -51,9 +52,9 @@ export default class GrenacheService {
   #circuitBreaker = null;
   #logger = null;
 
-  constructor(grapeUrl = 'http://127.0.0.1:30001') {
+  constructor(grapeUrl = null) {
     this.#nodeId = randomUUID();
-    this.#link = new Link({ grape: grapeUrl });
+    this.#link = new Link({ grape: grapeUrl || config.grenache.url });
 
     // Initialize logger
     this.#logger = logger.child({
@@ -64,8 +65,8 @@ export default class GrenacheService {
     // Initialize circuit breaker for network operations
     this.#circuitBreaker = new CircuitBreaker({
       name: `grenache-${this.#nodeId.slice(0, 8)}`,
-      failureThreshold: 3, // Open after 3 failures
-      resetTimeout: 30000, // 30 seconds before retry
+      failureThreshold: config.circuitBreaker.failureThreshold,
+      resetTimeout: config.circuitBreaker.resetTimeoutMs,
     });
   }
 

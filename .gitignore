@@ -9,3 +9,5 @@ coverage
 docs/
 !docs/README.md
 
+.env
+

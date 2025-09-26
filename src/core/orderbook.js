@@ -22,8 +22,9 @@ import {
   ErrorRecovery,
   ErrorContext,
   ErrorSeverity,
-} from './errors.js';
-import { logger, LogLevel } from './logger.js';
+} from '../utils/errors.js';
+import { logger, LogLevel } from '../utils/logger.js';
+import config from '../utils/config.js';
 
 /**
  * @typedef {Object} Order
@@ -220,15 +221,15 @@ export default class OrderBook {
       });
 
       // Check for performance issues (only log warnings, don't throw)
-      if (latency > 10000) {
-        // More than 10ms - log warning but don't throw
+      if (latency > config.performance.thresholdMs * 1000) {
+        // More than threshold - log warning but don't throw
         this.#logger.performance(
           LogLevel.WARN,
           'Order processing exceeded performance threshold',
           {
             operation: 'addOrder',
             duration: latency,
-            threshold: 10000,
+            threshold: config.performance.thresholdMs * 1000,
           },
           {
             orderId: order.id,
@@ -395,10 +396,10 @@ export default class OrderBook {
             value: amount,
           });
         }
-        if (amountDecimal.gt(new Decimal('1000000'))) {
+        if (amountDecimal.gt(new Decimal(config.performance.maxOrderAmount))) {
           validationErrors.push({
             field: 'amount',
-            message: 'Invalid amount. Too large (max 1,000,000)',
+            message: `Invalid amount. Too large (max ${config.performance.maxOrderAmount})`,
             value: amount,
           });
         }
@@ -421,10 +422,10 @@ export default class OrderBook {
             value: price,
           });
         }
-        if (priceDecimal.gt(new Decimal('1000000'))) {
+        if (priceDecimal.gt(new Decimal(config.performance.maxOrderPrice))) {
           validationErrors.push({
             field: 'price',
-            message: 'Invalid price. Too large (max 1,000,000)',
+            message: `Invalid price. Too large (max ${config.performance.maxOrderPrice})`,
             value: price,
           });
         }

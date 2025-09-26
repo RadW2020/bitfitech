@@ -3,9 +3,10 @@
  * @author Raul JM
  */
 
-import OrderBook from './orderbook.js';
-import GrenacheService from './grenache-service.js';
+import OrderBook from '../core/orderbook.js';
+import GrenacheService from '../services/grenache-service.js';
 import { randomUUID } from 'node:crypto';
+import config from '../utils/config.js';
 
 /**
  * @typedef {Object} ExchangeConfig
@@ -39,10 +40,9 @@ export default class ExchangeClient {
 
   constructor(config) {
     this.#config = {
-      grapeUrl: 'http://127.0.0.1:30001',
-      pair: 'BTC/USD',
-      userId: randomUUID(),
-      ...config,
+      grapeUrl: config.grenache?.url || config.grapeUrl || 'http://127.0.0.1:30001',
+      pair: config.exchange?.pair || config.pair || 'BTC/USD',
+      userId: config.userId || randomUUID(),
     };
 
     this.#userId = this.#config.userId;

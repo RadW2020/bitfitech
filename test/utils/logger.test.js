@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { createLogger, LogLevel, LogCategory, LogRotator } from '../src/utils/logger.js';
+import { createLogger, LogLevel, LogCategory, LogRotator } from '../../src/utils/logger.js';
 import { mkdirSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
