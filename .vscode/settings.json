@@ -1,10 +1,8 @@
 {
   "javascript.suggest.autoImports": true,
-  "javascript.suggest.includeCompletionsForModuleExports": true,
-  "javascript.suggest.includeCompletionsWithSnippetText": true,
   "javascript.validate.enable": true,
-  "javascript.implicitProjectConfig.checkJs": true,
-  "javascript.implicitProjectConfig.experimentalDecorators": true,
+  "js/ts.implicitProjectConfig.checkJs": true,
+  "js/ts.implicitProjectConfig.experimentalDecorators": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },
