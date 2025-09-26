@@ -1,6 +1,19 @@
 /**
  * @fileoverview Simple P2P Integration Test
- * Tests basic order placement and distribution between two clients
+ * 
+ * NOTE: This is NOT a real integration test - it doesn't test actual P2P communication.
+ * The clients don't connect to a real Grenache network, so they can't communicate.
+ * This test only validates:
+ * - Client initialization works
+ * - Order placement works locally
+ * - Vector clocks are initialized
+ * - System doesn't crash
+ * 
+ * For real P2P testing, you would need:
+ * - Running Grenache grape servers
+ * - Actual network communication between nodes
+ * - Order distribution and matching across nodes
+ * - Vector clock synchronization
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
