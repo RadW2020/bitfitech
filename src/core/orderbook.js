@@ -103,6 +103,15 @@ export default class OrderBook {
    * @private
    */
   async #handleOrderEvent(event, vectorClock) {
+    // Log vector clock for distributed ordering visibility
+    if (vectorClock) {
+      this.#logger.debug(LogLevel.DEBUG, 'Processing order with vector clock', {
+        orderId: event.data?.id || 'unknown',
+        vectorClock: vectorClock.clock,
+        nodeId: vectorClock.nodeId,
+      });
+    }
+
     this.#lastOrderResult = await this.#addOrderInternal(event.data);
   }
 
@@ -113,6 +122,15 @@ export default class OrderBook {
    * @private
    */
   async #handleTradeEvent(event, vectorClock) {
+    // Log vector clock for distributed ordering visibility
+    if (vectorClock) {
+      this.#logger.debug(LogLevel.DEBUG, 'Processing trade with vector clock', {
+        tradeCount: event.data?.trades?.length || 0,
+        vectorClock: vectorClock.clock,
+        nodeId: vectorClock.nodeId,
+      });
+    }
+
     // Handle trade events from other nodes
     if (event.data && event.data.trades) {
       this.#trades.push(...event.data.trades);

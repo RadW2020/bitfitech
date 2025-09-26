@@ -428,17 +428,17 @@ export default class ExchangeClient {
    */
   async #processEvent(eventType, eventData) {
     switch (eventType) {
-      case 'order':
-        await this.#processOrderEvent(eventData);
-        break;
-      case 'trade':
-        this.#processTradeEvent(eventData);
-        break;
-      case 'orderbook_sync':
-        this.#processOrderbookSyncEvent(eventData);
-        break;
-      default:
-        console.warn(`Unknown event type: ${eventType}`);
+    case 'order':
+      await this.#processOrderEvent(eventData);
+      break;
+    case 'trade':
+      this.#processTradeEvent(eventData);
+      break;
+    case 'orderbook_sync':
+      this.#processOrderbookSyncEvent(eventData);
+      break;
+    default:
+      console.warn(`Unknown event type: ${eventType}`);
     }
   }
 
@@ -494,9 +494,21 @@ export default class ExchangeClient {
    */
   #processOrderbookSyncEvent(eventData) {
     const { orderbook } = eventData;
-    // In a more sophisticated implementation, we might merge orderbooks
-    // For now, we just log the sync
-    console.log('📊 Processed orderbook sync event');
+
+    // Log orderbook sync details for debugging
+    console.log('📊 Processed orderbook sync event', {
+      pair: orderbook?.pair || 'unknown',
+      orderCount: orderbook?.orderCount || 0,
+      tradeCount: orderbook?.tradeCount || 0,
+      timestamp: orderbook?.timestamp || Date.now(),
+    });
+
+    // TODO: Implement orderbook merging logic
+    // In a more sophisticated implementation, we would:
+    // 1. Compare vector clocks to determine which state is newer
+    // 2. Merge conflicting orders using conflict resolution strategies
+    // 3. Update local orderbook state
+    // 4. Broadcast any changes to other nodes
   }
 
   /**
