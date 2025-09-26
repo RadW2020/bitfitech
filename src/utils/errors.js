@@ -503,4 +503,17 @@ export const ErrorCategory = {
   BUSINESS_LOGIC: 'business_logic',
   EXTERNAL_SERVICE: 'external_service',
   INFRASTRUCTURE: 'infrastructure',
+  SECURITY: 'security',
 };
+
+/**
+ * Security error
+ */
+export class SecurityError extends TradingSystemError {
+  constructor(message, options = {}) {
+    super(message, {
+      ...options,
+      errorType: 'SecurityError',
+    });
+  }
+}

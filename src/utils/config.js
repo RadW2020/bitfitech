@@ -183,6 +183,10 @@ class Configuration {
         1,
         10000
       ),
+      maxOrdersPerMinute: ConfigValidator.toNumber(process.env.MAX_ORDERS_PER_MINUTE, 100, 1, 1000),
+      maxOrdersPerSecond: ConfigValidator.toNumber(process.env.MAX_ORDERS_PER_SECOND, 10, 1, 100),
+      maxMessageSize:
+        ConfigValidator.toNumber(process.env.MAX_MESSAGE_SIZE_KB, 1024, 1, 10000) * 1024,
       enableCORS: ConfigValidator.toBoolean(process.env.ENABLE_CORS, true),
     };
 

@@ -7,6 +7,7 @@ import OrderBook from '../core/orderbook.js';
 import GrenacheService from '../services/grenache-service.js';
 import { randomUUID } from 'node:crypto';
 import config from '../utils/config.js';
+import { MultiTierRateLimiter } from '../utils/rate-limiter.js';
 
 /**
  * @typedef {Object} ExchangeConfig
@@ -37,6 +38,7 @@ export default class ExchangeClient {
   #isInitialized = false;
   #orderHistory = new Map();
   #tradeHistory = [];
+  #rateLimiter = new MultiTierRateLimiter();
 
   constructor(config) {
     this.#config = {
@@ -211,6 +213,11 @@ export default class ExchangeClient {
   async #placeOrder(side, amount, price) {
     if (!this.#isInitialized) {
       throw new Error('Exchange client not initialized');
+    }
+
+    // Rate limiting
+    if (!this.#rateLimiter.isAllowed(this.#userId, 'orders')) {
+      throw new Error('Rate limit exceeded: too many orders');
     }
 
     try {

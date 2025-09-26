@@ -19,12 +19,12 @@ import {
   OrderValidationError,
   OrderMatchingError,
   PerformanceError,
-  ErrorRecovery,
   ErrorContext,
   ErrorSeverity,
 } from '../utils/errors.js';
 import { logger, LogLevel } from '../utils/logger.js';
 import config from '../utils/config.js';
+import { SecurityValidator } from '../utils/security.js';
 
 /**
  * @typedef {Object} Order
@@ -346,7 +346,10 @@ export default class OrderBook {
    * @private
    */
   #validateOrder(orderData) {
-    const { userId, side, amount, price, pair } = orderData;
+    // Security validation first
+    const sanitizedData = SecurityValidator.validateOrder({ ...orderData });
+
+    const { userId, side, amount, price, pair } = sanitizedData;
     const validationErrors = [];
 
     // Validate userId
