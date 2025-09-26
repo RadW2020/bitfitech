@@ -9,7 +9,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "start:client": "node src/client.js",
+    "start:client": "node src/clients/example-client.js",
     "start:grapes": "node scripts/start-grapes.js",
     "dev": "node --watch src/index.js",
     "test": "vitest run",
@@ -49,13 +49,13 @@
       "import": "./src/index.js"
     },
     "./orderbook": {
-      "import": "./src/orderbook.js"
+      "import": "./src/core/orderbook.js"
     },
     "./grenache-service": {
-      "import": "./src/grenache-service.js"
+      "import": "./src/services/grenache-service.js"
     },
     "./exchange-client": {
-      "import": "./src/exchange-client.js"
+      "import": "./src/clients/exchange-client.js"
     }
   }
 }
