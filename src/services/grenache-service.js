@@ -17,7 +17,6 @@ import {
 import { logger, LogLevel } from '../utils/logger.js';
 import config from '../utils/config.js';
 import { VectorClock } from '../utils/vector-clock.js';
-import { NodeSync } from '../utils/node-sync.js';
 
 /**
  * @typedef {Object} OrderMessage
@@ -54,7 +53,6 @@ export default class GrenacheService {
   #circuitBreaker = null;
   #logger = null;
   #vectorClock = null;
-  #nodeSync = null;
 
   constructor(grapeUrl = null) {
     this.#nodeId = randomUUID();
@@ -75,9 +73,6 @@ export default class GrenacheService {
 
     // Initialize vector clock for distributed ordering
     this.#vectorClock = new VectorClock(this.#nodeId);
-
-    // Initialize node synchronization
-    this.#nodeSync = new NodeSync(this.#nodeId);
   }
 
   /**
@@ -450,9 +445,6 @@ export default class GrenacheService {
       case 'orderbook_sync':
         this.#handleOrderbookMessage(payload);
         break;
-      case 'sync_request':
-        this.#handleSyncRequest(payload, handler);
-        break;
       default:
         console.warn(`⚠️ Unknown message type: ${payload.type}`);
       }
@@ -553,101 +545,11 @@ export default class GrenacheService {
     return this.#vectorClock.toObject();
   }
 
-  /**
-   * Start node synchronization
-   * @param {Function} getNodeState - Function to get current node state
-   * @param {Function} getActiveNodes - Function to get active nodes
-   */
-  startNodeSync(getNodeState, getActiveNodes) {
-    this.#nodeSync.startPeriodicSync(
-      getNodeState,
-      getActiveNodes,
-      this.#sendSyncRequest.bind(this)
-    );
-  }
+  // Node synchronization removed - vector clocks handle event ordering
 
-  /**
-   * Send sync request to a specific node
-   * @param {string} nodeId - Target node ID
-   * @param {Object} currentNodeState - Current node state
-   * @returns {Promise<Object>} Remote node state
-   * @private
-   */
-  async #sendSyncRequest(nodeId, currentNodeState) {
-    try {
-      const message = {
-        id: randomUUID(),
-        type: 'sync_request',
-        fromNode: this.#nodeId,
-        payload: currentNodeState,
-        vectorClock: this.#vectorClock.toObject(),
-        timestamp: Date.now(),
-      };
 
-      // Use sendToAllNodes for now - in a real implementation, this would send to a specific node
-      const result = await this.#sendToAllNodes(message);
-      return result;
-    } catch (error) {
-      this.#logger.error(LogLevel.ERROR, `Sync request to ${nodeId} failed`, error);
-      throw error;
-    }
-  }
 
-  /**
-   * Get node synchronization status
-   * @returns {Object} Sync status
-   */
-  getNodeSyncStatus() {
-    return this.#nodeSync.getStatus();
-  }
 
-  /**
-   * Handle sync request
-   * @param {OrderMessage} message - Sync request message
-   * @param {Object} handler - Response handler
-   * @private
-   */
-  #handleSyncRequest(message, handler) {
-    try {
-      console.log(`🔄 Received sync request from node ${message.fromNode}`);
-
-      // Get current node state
-      const currentNodeState = {
-        nodeId: this.#nodeId,
-        orderbook: this.#getCurrentOrderbookState(),
-        vectorClock: this.#vectorClock.toObject(),
-        timestamp: Date.now(),
-        version: 1,
-      };
-
-      // Send response with current state
-      handler.reply(null, {
-        success: true,
-        nodeId: this.#nodeId,
-        state: currentNodeState,
-        message: 'Sync response',
-      });
-    } catch (error) {
-      console.error('❌ Error handling sync request:', error);
-      handler.reply(new Error('Failed to handle sync request'), null);
-    }
-  }
-
-  /**
-   * Get current orderbook state
-   * @returns {Object} Orderbook state
-   * @private
-   */
-  #getCurrentOrderbookState() {
-    // This would be implemented by the ExchangeClient
-    // For now, return a placeholder
-    return {
-      orderCount: 0,
-      tradeCount: 0,
-      orders: [],
-      trades: [],
-    };
-  }
 
   /**
    * Get circuit breaker metrics

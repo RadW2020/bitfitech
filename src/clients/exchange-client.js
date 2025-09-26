@@ -112,7 +112,7 @@ export default class ExchangeClient {
       this.#setupMessageHandlers();
 
       // Start node synchronization
-      this.#startNodeSync();
+      // Node sync removed - vector clocks handle ordering
 
       this.#isInitialized = true;
       console.log(
@@ -511,29 +511,7 @@ export default class ExchangeClient {
     // 4. Broadcast any changes to other nodes
   }
 
-  /**
-   * Start node synchronization
-   * @private
-   */
-  #startNodeSync() {
-    // Get current node state
-    const getNodeState = () => ({
-      nodeId: this.#userId,
-      orderbook: this.#orderbook.getMetrics(),
-      vectorClock: this.#grenacheService.getVectorClock(),
-      timestamp: Date.now(),
-      version: 1,
-    });
-
-    // Get active nodes (simplified - in real implementation, this would query the DHT)
-    const getActiveNodes = () => {
-      // For now, return empty array - in real implementation, this would query Grenache DHT
-      return [];
-    };
-
-    // Start synchronization
-    this.#grenacheService.startNodeSync(getNodeState, getActiveNodes);
-  }
+  // Node synchronization removed - vector clocks handle event ordering
 
   /**
    * Get vector clock status for debugging
