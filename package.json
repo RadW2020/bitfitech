@@ -32,7 +32,9 @@
   "dependencies": {
     "decimal.js": "^10.6.0",
     "grenache-nodejs-http": "^1.0.1",
-    "grenache-nodejs-link": "^1.0.2"
+    "grenache-nodejs-link": "^1.0.2",
+    "pino": "^9.11.0",
+    "pino-pretty": "^13.1.1"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.4",

@@ -23,6 +23,7 @@ import {
   ErrorContext,
   ErrorSeverity,
 } from './errors.js';
+import { logger, LogLevel } from './logger.js';
 
 /**
  * @typedef {Object} Order
@@ -65,6 +66,7 @@ export default class OrderBook {
   #isProcessing = false;
   #orderCount = 0;
   #tradeCount = 0;
+  #logger = null;
 
   // Performance metrics
   #metrics = {
@@ -77,6 +79,10 @@ export default class OrderBook {
 
   constructor(pair = 'BTC/USD') {
     this.#pair = pair;
+    this.#logger = logger.child({
+      component: 'OrderBook',
+      pair: this.#pair,
+    });
   }
 
   /**
@@ -203,18 +209,35 @@ export default class OrderBook {
       const latency = Number(endTime - startTime) / 1000; // Convert to microseconds
       this.#updateLatencyMetrics(latency);
 
+      // Log successful order processing
+      this.#logger.order(LogLevel.INFO, 'Order processed successfully', order, {
+        tradesExecuted: matchResult.trades.length,
+        remainingAmount: matchResult.remainingOrder
+          ? matchResult.remainingOrder.amount.toString()
+          : '0',
+        orderStatus: order.status,
+        processingTime: latency,
+      });
+
       // Check for performance issues (only log warnings, don't throw)
       if (latency > 10000) {
         // More than 10ms - log warning but don't throw
-        console.warn(`⚠️ Order processing took ${latency.toFixed(2)}μs (threshold: 10ms)`, {
-          orderId: order.id,
-          userId: order.userId,
-          side: order.side,
-          amount: order.amount.toString(),
-          price: order.price.toString(),
-          duration: latency,
-          threshold: 10000,
-        });
+        this.#logger.performance(
+          LogLevel.WARN,
+          'Order processing exceeded performance threshold',
+          {
+            operation: 'addOrder',
+            duration: latency,
+            threshold: 10000,
+          },
+          {
+            orderId: order.id,
+            userId: order.userId,
+            side: order.side,
+            amount: order.amount.toString(),
+            price: order.price.toString(),
+          }
+        );
       }
 
       return matchResult;
@@ -226,11 +249,9 @@ export default class OrderBook {
 
       // Log performance errors but don't throw them
       if (error instanceof PerformanceError) {
-        console.warn(`⚠️ Performance issue detected: ${error.message}`, {
+        this.#logger.error(LogLevel.WARN, 'Performance issue detected', error, {
           orderId: orderData.id || 'unknown',
           userId: orderData.userId,
-          duration: error.duration,
-          threshold: error.threshold,
         });
         // Return empty result instead of throwing
         return { trades: [], remainingOrder: null };

@@ -15,6 +15,7 @@ import {
   ErrorContext,
   ErrorSeverity,
 } from './errors.js';
+import { logger, LogLevel } from './logger.js';
 
 /**
  * @typedef {Object} OrderMessage
@@ -48,10 +49,17 @@ export default class GrenacheService {
   #orderbookHandlers = new Set();
   #tradeHandlers = new Set();
   #circuitBreaker = null;
+  #logger = null;
 
   constructor(grapeUrl = 'http://127.0.0.1:30001') {
     this.#nodeId = randomUUID();
     this.#link = new Link({ grape: grapeUrl });
+
+    // Initialize logger
+    this.#logger = logger.child({
+      component: 'GrenacheService',
+      nodeId: this.#nodeId.slice(0, 8),
+    });
 
     // Initialize circuit breaker for network operations
     this.#circuitBreaker = new CircuitBreaker({
@@ -127,11 +135,16 @@ export default class GrenacheService {
       });
 
       this.#isInitialized = true;
-      console.log(
-        `🚀 Grenache service initialized on port ${this.#port} with node ID: ${this.#nodeId}`
-      );
+      this.#logger.system(LogLevel.INFO, 'Grenache service initialized', {
+        port: this.#port,
+        nodeId: this.#nodeId,
+        serviceName: this.#serviceName,
+      });
     } catch (error) {
-      console.error('❌ Failed to initialize Grenache service:', error);
+      this.#logger.error(LogLevel.ERROR, 'Failed to initialize Grenache service', error, {
+        port: this.#port,
+        nodeId: this.#nodeId,
+      });
       throw error;
     }
   }
@@ -213,6 +226,22 @@ export default class GrenacheService {
         return await this.#sendToAllNodes(message);
       });
 
+      // Log successful distribution
+      this.#logger.network(
+        LogLevel.INFO,
+        'Order distributed successfully',
+        {
+          nodeId: this.#nodeId,
+          operation: 'distributeOrder',
+        },
+        {
+          orderId: order.id,
+          distributedTo: result.successfulNodes,
+          failedTo: result.failedNodes,
+          totalNodes: result.successfulNodes.length + result.failedNodes.length,
+        }
+      );
+
       return {
         success: result.success,
         distributedTo: result.successfulNodes,
@@ -285,7 +314,10 @@ export default class GrenacheService {
       });
       return result.success;
     } catch (error) {
-      console.error('❌ Failed to broadcast trade:', error);
+      this.#logger.error(LogLevel.ERROR, 'Failed to broadcast trade', error, {
+        tradeId: trade.id,
+        nodeId: this.#nodeId,
+      });
       return false;
     }
   }
@@ -314,7 +346,10 @@ export default class GrenacheService {
       });
       return result.success;
     } catch (error) {
-      console.error('❌ Failed to sync orderbook:', error);
+      this.#logger.error(LogLevel.ERROR, 'Failed to sync orderbook', error, {
+        orderbookPair: orderbook.pair,
+        nodeId: this.#nodeId,
+      });
       return false;
     }
   }
@@ -486,6 +521,9 @@ export default class GrenacheService {
       this.#link.stop();
     }
     this.#isInitialized = false;
-    console.log('🛑 Grenache service destroyed');
+    this.#logger.system(LogLevel.INFO, 'Grenache service destroyed', {
+      nodeId: this.#nodeId,
+      port: this.#port,
+    });
   }
 }
