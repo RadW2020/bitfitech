@@ -1,8 +1,6 @@
-# P2P Distributed Exchange - Bitfinex Challenge
+# P2P Distributed Exchange
 
-> **Challenge**: Create a simplified P2P distributed exchange where each client has its own orderbook instance, orders are distributed between nodes using Grenache, and matching happens locally with remainder distribution.
-
-## 🚀 Quick Start (30 seconds)
+## 🚀 Quick Start
 
 ### 1. Install Dependencies
 
