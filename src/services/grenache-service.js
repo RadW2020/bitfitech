@@ -585,7 +585,8 @@ export default class GrenacheService {
         timestamp: Date.now(),
       };
 
-      const result = await this.#sendToNode(nodeId, message);
+      // Use sendToAllNodes for now - in a real implementation, this would send to a specific node
+      const result = await this.#sendToAllNodes(message);
       return result;
     } catch (error) {
       this.#logger.error(LogLevel.ERROR, `Sync request to ${nodeId} failed`, error);
