@@ -95,7 +95,7 @@ class ConfigValidator {
     try {
       new URL(value);
       return value;
-    } catch (error) {
+    } catch {
       throw new Error(`Invalid URL: ${value}`);
     }
   }
@@ -215,7 +215,7 @@ class Configuration {
       try {
         const fs = require('node:fs');
         fs.mkdirSync(this.logging.directory, { recursive: true });
-      } catch (error) {
+      } catch {
         errors.push(`Cannot create log directory: ${this.logging.directory}`);
       }
     }
@@ -265,70 +265,70 @@ class Configuration {
     };
 
     switch (env) {
-      case 'development':
-        return {
-          ...baseConfig,
-          logging: {
-            ...baseConfig.logging,
-            level: 'debug',
-          },
-          security: {
-            ...baseConfig.security,
-            enableRateLimit: false,
-          },
-        };
+    case 'development':
+      return {
+        ...baseConfig,
+        logging: {
+          ...baseConfig.logging,
+          level: 'debug',
+        },
+        security: {
+          ...baseConfig.security,
+          enableRateLimit: false,
+        },
+      };
 
-      case 'staging':
-        return {
-          ...baseConfig,
-          logging: {
-            ...baseConfig.logging,
-            level: 'info',
-          },
-          security: {
-            ...baseConfig.security,
-            enableRateLimit: true,
-            maxRequestsPerMinute: 500,
-          },
-        };
+    case 'staging':
+      return {
+        ...baseConfig,
+        logging: {
+          ...baseConfig.logging,
+          level: 'info',
+        },
+        security: {
+          ...baseConfig.security,
+          enableRateLimit: true,
+          maxRequestsPerMinute: 500,
+        },
+      };
 
-      case 'production':
-        return {
-          ...baseConfig,
-          logging: {
-            ...baseConfig.logging,
-            level: 'warn',
-          },
-          security: {
-            ...baseConfig.security,
-            enableRateLimit: true,
-            maxRequestsPerMinute: 1000,
-          },
-          performance: {
-            ...baseConfig.performance,
-            thresholdMs: 5, // Stricter in production
-          },
-        };
+    case 'production':
+      return {
+        ...baseConfig,
+        logging: {
+          ...baseConfig.logging,
+          level: 'warn',
+        },
+        security: {
+          ...baseConfig.security,
+          enableRateLimit: true,
+          maxRequestsPerMinute: 1000,
+        },
+        performance: {
+          ...baseConfig.performance,
+          thresholdMs: 5, // Stricter in production
+        },
+      };
 
-      case 'test':
-        return {
-          ...baseConfig,
-          logging: {
-            ...baseConfig.logging,
-            level: 'error',
-          },
-          exchange: {
-            ...baseConfig.exchange,
-            port: 0, // Random port for tests
-          },
-          security: {
-            ...baseConfig.security,
-            enableRateLimit: false,
-          },
-        };
+    case 'test':
+      return {
+        ...baseConfig,
+        logging: {
+          ...baseConfig.logging,
+          level: 'error',
+        },
+        exchange: {
+          ...baseConfig.exchange,
+          port: 0, // Random port for tests
+        },
+        security: {
+          ...baseConfig.security,
+          enableRateLimit: false,
+        },
+      };
 
-      default:
-        return baseConfig;
+    default:
+      return baseConfig;
     }
   }
 

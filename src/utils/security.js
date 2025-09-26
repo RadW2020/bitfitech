@@ -87,7 +87,7 @@ export class SecurityValidator {
     }
 
     // Remove control characters and trim
-    let sanitized = input.replace(/[\x00-\x1F\x7F]/g, '').trim();
+    let sanitized = input.replace(/[\p{Cc}]/gu, '').trim();
 
     // Limit length
     if (sanitized.length < minLength) {

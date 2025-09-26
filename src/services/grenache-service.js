@@ -11,7 +11,6 @@ import {
   NetworkError,
   GrenacheServiceError,
   CircuitBreakerError,
-  ErrorRecovery,
   ErrorContext,
   ErrorSeverity,
 } from '../utils/errors.js';
@@ -397,7 +396,7 @@ export default class GrenacheService {
         completed++;
 
         if (err) {
-          console.warn(`⚠️ Failed to send message to node:`, err.message);
+          console.warn('⚠️ Failed to send message to node:', err.message);
           failedNodes.push('unknown');
         } else {
           successfulNodes.push(data?.nodeId || 'unknown');

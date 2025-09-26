@@ -463,7 +463,7 @@ export default class OrderBook {
           });
         }
       }
-    } catch (error) {
+    } catch {
       validationErrors.push({
         field: 'amount',
         message: 'Invalid number format for amount',
@@ -489,7 +489,7 @@ export default class OrderBook {
           });
         }
       }
-    } catch (error) {
+    } catch {
       validationErrors.push({
         field: 'price',
         message: 'Invalid number format for price',

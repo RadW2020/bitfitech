@@ -209,7 +209,7 @@ export class NodeSync {
       }
 
       // Merge states
-      const mergedState = this.mergeStates(currentNodeState, remoteState, conflicts);
+      const mergedState = this.mergeStates(currentNodeState, remoteState);
 
       // Store remote state
       this.nodeStates.set(nodeId, {
@@ -292,7 +292,7 @@ export class NodeSync {
    * @param {string[]} conflicts - Detected conflicts
    * @returns {NodeState} Merged state
    */
-  mergeStates(localState, remoteState, conflicts) {
+  mergeStates(localState, remoteState) {
     const localClock = new VectorClock(this.nodeId, localState.vectorClock);
     const remoteClock = new VectorClock(remoteState.nodeId, remoteState.vectorClock);
 
@@ -303,19 +303,19 @@ export class NodeSync {
     let mergedOrderbook;
 
     switch (this.conflictResolution) {
-      case 'vector-clock':
-        mergedOrderbook = this.mergeByVectorClock(
-          localState.orderbook,
-          remoteState.orderbook,
-          localClock,
-          remoteClock
-        );
-        break;
-      case 'timestamp':
-        mergedOrderbook = this.mergeByTimestamp(localState.orderbook, remoteState.orderbook);
-        break;
-      default:
-        mergedOrderbook = localState.orderbook; // Keep local state
+    case 'vector-clock':
+      mergedOrderbook = this.mergeByVectorClock(
+        localState.orderbook,
+        remoteState.orderbook,
+        localClock,
+        remoteClock
+      );
+      break;
+    case 'timestamp':
+      mergedOrderbook = this.mergeByTimestamp(localState.orderbook, remoteState.orderbook);
+      break;
+    default:
+      mergedOrderbook = localState.orderbook; // Keep local state
     }
 
     return {

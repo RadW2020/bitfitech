@@ -1,8 +1,6 @@
 {
   "javascript.suggest.autoImports": true,
   "javascript.validate.enable": true,
-  "js/ts.implicitProjectConfig.checkJs": true,
-  "js/ts.implicitProjectConfig.experimentalDecorators": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },

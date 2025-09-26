@@ -319,17 +319,17 @@ export class ErrorRecovery {
     const strategy = this.determineStrategy(error);
 
     switch (strategy) {
-      case this.strategies.RETRY:
-        return this.retryOperation(operation, options);
-      case this.strategies.FALLBACK:
-        return this.fallbackOperation(operation, options);
-      case this.strategies.CIRCUIT_BREAK:
-        return this.circuitBreakOperation(error, options);
-      case this.strategies.GRACEFUL_DEGRADATION:
-        return this.gracefulDegradationOperation(operation, options);
-      case this.strategies.FAIL_FAST:
-      default:
-        throw error;
+    case this.strategies.RETRY:
+      return this.retryOperation(operation, options);
+    case this.strategies.FALLBACK:
+      return this.fallbackOperation(operation, options);
+    case this.strategies.CIRCUIT_BREAK:
+      return this.circuitBreakOperation(error, options);
+    case this.strategies.GRACEFUL_DEGRADATION:
+      return this.gracefulDegradationOperation(operation, options);
+    case this.strategies.FAIL_FAST:
+    default:
+      throw error;
     }
   }
 
@@ -350,7 +350,7 @@ export class ErrorRecovery {
       } catch (error) {
         // Check if error is retryable - handle both TradingSystemError and regular Error
         const isRetryable = error.isRetryable ? error.isRetryable() :
-                           (error instanceof TradingSystemError ? error.retryable : true);
+          (error instanceof TradingSystemError ? error.retryable : true);
 
         if (attempt === maxRetries || !isRetryable) {
           throw error;

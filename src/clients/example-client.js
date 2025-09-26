@@ -86,7 +86,7 @@ class ExampleClient {
         side === 'buy'
           ? await this.#exchange.placeBuyOrder(amount, price)
           : await this.#exchange.placeSellOrder(amount, price);
-      console.log(`✅ Order result:`, result);
+      console.log('✅ Order result:', result);
     } catch (error) {
       console.error('❌ Error placing random order:', error);
     }

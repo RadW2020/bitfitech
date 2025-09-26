@@ -3,7 +3,7 @@
  * @author Raul JM
  */
 
-import { SecurityError, ErrorContext, ErrorSeverity } from './errors.js';
+import { SecurityError } from './errors.js';
 
 /**
  * Rate limiter with sliding window algorithm

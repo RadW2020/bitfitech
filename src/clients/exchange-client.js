@@ -40,11 +40,11 @@ export default class ExchangeClient {
   #tradeHistory = [];
   #rateLimiter = new MultiTierRateLimiter();
 
-  constructor(config) {
+  constructor(clientConfig) {
     this.#config = {
-      grapeUrl: config.grenache?.url || config.grapeUrl || 'http://127.0.0.1:30001',
-      pair: config.exchange?.pair || config.pair || 'BTC/USD',
-      userId: config.userId || randomUUID(),
+      grapeUrl: clientConfig.grenache?.url || clientConfig.grapeUrl || config.grenache.url,
+      pair: clientConfig.exchange?.pair || clientConfig.pair || config.exchange.pair,
+      userId: clientConfig.userId || randomUUID(),
     };
 
     this.#userId = this.#config.userId;
@@ -348,7 +348,7 @@ export default class ExchangeClient {
     // Handle orderbook sync from other nodes
     this.#grenacheService.addOrderbookHandler((orderbook, vectorClock) => {
       try {
-        console.log(`📊 Received orderbook sync from other node`);
+        console.log('📊 Received orderbook sync from other node');
         // In a more sophisticated implementation, we might merge orderbooks
         // For now, we just log the sync
       } catch (error) {
