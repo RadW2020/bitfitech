@@ -40,6 +40,8 @@ A simplified P2P distributed exchange implementation.
 - **Order Distribution**: Automatic order sharing between nodes
 - **Trade Broadcasting**: Real-time trade notifications
 - **Price-Time Priority**: Fair order matching algorithm
+- **Vector Clocks**: Distributed event ordering for consistency
+- **Node Synchronization**: Automatic state reconciliation between nodes
 
 ## 🚀 Getting Started
 
@@ -236,6 +238,12 @@ npm run docs
 
 After running `npm run docs`, open `docs/index.html` in your browser to view the complete API documentation.
 
+### Vector Clocks & Node Synchronization
+
+For detailed information about the distributed ordering and synchronization system, see:
+
+- **[Vector Clocks & Node Sync Guide](docs/VECTOR_CLOCKS_AND_SYNC.md)** - Comprehensive guide to vector clocks and node synchronization
+
 ## 🏗️ Project Structure
 
 ```
@@ -260,3 +268,11 @@ test/
 ├── services/                   # Service tests
 └── utils/                      # Utility tests
 ```
+
+## 🚧 Current Limitations
+
+### Persistence
+
+- **In-memory state**: All exchange state is maintained in memory
+- **No recovery**: If a node crashes, it loses all its orders and trades
+- **No history**: No way to recover previous state

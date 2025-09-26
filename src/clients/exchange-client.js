@@ -108,6 +108,9 @@ export default class ExchangeClient {
       // Set up message handlers
       this.#setupMessageHandlers();
 
+      // Start node synchronization
+      this.#startNodeSync();
+
       this.#isInitialized = true;
       console.log(
         `🚀 Exchange client initialized for user ${this.#userId} on pair ${this.#config.pair}`
@@ -352,6 +355,30 @@ export default class ExchangeClient {
         console.error('❌ Error processing orderbook sync:', error);
       }
     });
+  }
+
+  /**
+   * Start node synchronization
+   * @private
+   */
+  #startNodeSync() {
+    // Get current node state
+    const getNodeState = () => ({
+      nodeId: this.#userId,
+      orderbook: this.#orderbook.getMetrics(),
+      vectorClock: this.#grenacheService.getVectorClock(),
+      timestamp: Date.now(),
+      version: 1,
+    });
+
+    // Get active nodes (simplified - in real implementation, this would query the DHT)
+    const getActiveNodes = () => {
+      // For now, return empty array - in real implementation, this would query Grenache DHT
+      return [];
+    };
+
+    // Start synchronization
+    this.#grenacheService.startNodeSync(getNodeState, getActiveNodes);
   }
 
   /**
