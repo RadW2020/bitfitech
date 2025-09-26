@@ -7,6 +7,14 @@ import { PeerRPCServer, PeerRPCClient } from 'grenache-nodejs-http';
 import Link from 'grenache-nodejs-link';
 import { randomUUID } from 'node:crypto';
 import CircuitBreaker from './circuit-breaker.js';
+import {
+  NetworkError,
+  GrenacheServiceError,
+  CircuitBreakerError,
+  ErrorRecovery,
+  ErrorContext,
+  ErrorSeverity,
+} from './errors.js';
 
 /**
  * @typedef {Object} OrderMessage
@@ -183,7 +191,13 @@ export default class GrenacheService {
    */
   async distributeOrder(order) {
     if (!this.#isInitialized) {
-      throw new Error('Grenache service not initialized');
+      throw new GrenacheServiceError('Grenache service not initialized', {
+        context: new ErrorContext().withOrder(order).withNetwork({ nodeId: this.#nodeId }).build(),
+        serviceName: this.#serviceName,
+        operation: 'distributeOrder',
+        severity: ErrorSeverity.ERROR,
+        retryable: false,
+      });
     }
 
     const message = {
@@ -205,12 +219,45 @@ export default class GrenacheService {
         failedTo: result.failedNodes,
       };
     } catch (error) {
-      console.error('❌ Failed to distribute order:', error);
-      return {
-        success: false,
-        distributedTo: [],
-        failedTo: ['all'],
-      };
+      // Handle circuit breaker errors
+      if (error.message.includes('Circuit breaker')) {
+        throw new CircuitBreakerError('Circuit breaker is open for order distribution', {
+          context: new ErrorContext()
+            .withOrder(order)
+            .withNetwork({ nodeId: this.#nodeId })
+            .build(),
+          breakerName: this.#circuitBreaker.name,
+          state: this.#circuitBreaker.state,
+          failureCount: this.#circuitBreaker.failureCount,
+          severity: ErrorSeverity.WARNING,
+          retryable: false,
+        });
+      }
+
+      // Handle network errors
+      if (error instanceof NetworkError) {
+        throw new GrenacheServiceError('Network error during order distribution', {
+          context: new ErrorContext()
+            .withOrder(order)
+            .withNetwork({ nodeId: this.#nodeId })
+            .build(),
+          serviceName: this.#serviceName,
+          operation: 'distributeOrder',
+          severity: ErrorSeverity.ERROR,
+          retryable: true,
+          cause: error,
+        });
+      }
+
+      // Handle other errors
+      throw new GrenacheServiceError('Failed to distribute order', {
+        context: new ErrorContext().withOrder(order).withNetwork({ nodeId: this.#nodeId }).build(),
+        serviceName: this.#serviceName,
+        operation: 'distributeOrder',
+        severity: ErrorSeverity.ERROR,
+        retryable: true,
+        cause: error,
+      });
     }
   }
 

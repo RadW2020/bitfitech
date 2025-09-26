@@ -14,6 +14,15 @@
 
 import { randomUUID } from 'node:crypto';
 import Decimal from 'decimal.js';
+import {
+  OrderError,
+  OrderValidationError,
+  OrderMatchingError,
+  PerformanceError,
+  ErrorRecovery,
+  ErrorContext,
+  ErrorSeverity,
+} from './errors.js';
 
 /**
  * @typedef {Object} Order
@@ -111,7 +120,18 @@ export default class OrderBook {
     const startTime = process.hrtime.bigint();
 
     if (this.#isProcessing) {
-      throw new Error('OrderBook is currently processing another order');
+      throw new OrderError('OrderBook is currently processing another order', {
+        context: new ErrorContext()
+          .withOrder(orderData)
+          .withCustom('orderbook', {
+            pair: this.#pair,
+            isProcessing: this.#isProcessing,
+            orderCount: this.#orderCount,
+          })
+          .build(),
+        severity: ErrorSeverity.WARNING,
+        retryable: true,
+      });
     }
 
     this.#isProcessing = true;
@@ -137,8 +157,33 @@ export default class OrderBook {
       this.#orderCount++;
       this.#metrics.totalOrders++;
 
-      // Process matching
-      const matchResult = await this.#processMatching(order);
+      // Process matching with error handling
+      let matchResult;
+      try {
+        matchResult = await this.#processMatching(order);
+      } catch (error) {
+        // Remove order from map if matching fails
+        this.#orderMap.delete(order.id);
+        this.#orderCount--;
+        this.#metrics.totalOrders--;
+
+        throw new OrderMatchingError('Failed to process order matching', {
+          context: new ErrorContext()
+            .withOrder(order)
+            .withCustom('orderbook', {
+              pair: this.#pair,
+              orderCount: this.#orderCount,
+              tradeCount: this.#tradeCount,
+            })
+            .build(),
+          severity: ErrorSeverity.ERROR,
+          retryable: true,
+          matchingContext: {
+            originalError: error.message,
+            orderId: order.id,
+          },
+        });
+      }
 
       // Update order status
       if (matchResult.remainingOrder) {
@@ -158,7 +203,53 @@ export default class OrderBook {
       const latency = Number(endTime - startTime) / 1000; // Convert to microseconds
       this.#updateLatencyMetrics(latency);
 
+      // Check for performance issues (only log warnings, don't throw)
+      if (latency > 10000) {
+        // More than 10ms - log warning but don't throw
+        console.warn(`⚠️ Order processing took ${latency.toFixed(2)}μs (threshold: 10ms)`, {
+          orderId: order.id,
+          userId: order.userId,
+          side: order.side,
+          amount: order.amount.toString(),
+          price: order.price.toString(),
+          duration: latency,
+          threshold: 10000,
+        });
+      }
+
       return matchResult;
+    } catch (error) {
+      // Re-throw known errors (except PerformanceError which we now log instead of throw)
+      if (error instanceof OrderError) {
+        throw error;
+      }
+
+      // Log performance errors but don't throw them
+      if (error instanceof PerformanceError) {
+        console.warn(`⚠️ Performance issue detected: ${error.message}`, {
+          orderId: orderData.id || 'unknown',
+          userId: orderData.userId,
+          duration: error.duration,
+          threshold: error.threshold,
+        });
+        // Return empty result instead of throwing
+        return { trades: [], remainingOrder: null };
+      }
+
+      // Wrap unknown errors
+      throw new OrderError('Unexpected error during order processing', {
+        context: new ErrorContext()
+          .withOrder(orderData)
+          .withCustom('orderbook', {
+            pair: this.#pair,
+            orderCount: this.#orderCount,
+            isProcessing: this.#isProcessing,
+          })
+          .build(),
+        severity: ErrorSeverity.ERROR,
+        retryable: true,
+        cause: error,
+      });
     } finally {
       this.#isProcessing = false;
     }
@@ -228,50 +319,123 @@ export default class OrderBook {
   }
 
   /**
-   * Validate order data with Decimal precision
+   * Validate order data with Decimal precision and comprehensive error handling
    * @param {Object} orderData - Order data to validate
    * @private
    */
   #validateOrder(orderData) {
     const { userId, side, amount, price, pair } = orderData;
+    const validationErrors = [];
 
+    // Validate userId
     if (!userId || typeof userId !== 'string') {
-      throw new Error('Invalid userId');
+      validationErrors.push({
+        field: 'userId',
+        message: 'Invalid userId. Must be a non-empty string',
+        value: userId,
+      });
     }
 
+    // Validate side
     if (!['buy', 'sell'].includes(side)) {
-      throw new Error('Invalid side. Must be "buy" or "sell"');
+      validationErrors.push({
+        field: 'side',
+        message: 'Invalid side. Must be "buy" or "sell"',
+        value: side,
+      });
     }
 
+    // Validate amount
     if (!amount || typeof amount !== 'string') {
-      throw new Error('Invalid amount. Must be a string');
+      validationErrors.push({
+        field: 'amount',
+        message: 'Invalid amount. Must be a string',
+        value: amount,
+      });
     }
 
+    // Validate price
     if (!price || typeof price !== 'string') {
-      throw new Error('Invalid price. Must be a string');
+      validationErrors.push({
+        field: 'price',
+        message: 'Invalid price. Must be a string',
+        value: price,
+      });
     }
 
     // Validate with Decimal for precision
     try {
-      const amountDecimal = new Decimal(amount);
-      const priceDecimal = new Decimal(price);
-
-      if (amountDecimal.lte(0)) {
-        throw new Error('Invalid amount. Must be positive');
-      }
-
-      if (priceDecimal.lte(0)) {
-        throw new Error('Invalid price. Must be positive');
+      if (amount && typeof amount === 'string') {
+        const amountDecimal = new Decimal(amount);
+        if (amountDecimal.lte(0)) {
+          validationErrors.push({
+            field: 'amount',
+            message: 'Invalid amount. Must be positive',
+            value: amount,
+          });
+        }
+        if (amountDecimal.gt(new Decimal('1000000'))) {
+          validationErrors.push({
+            field: 'amount',
+            message: 'Invalid amount. Too large (max 1,000,000)',
+            value: amount,
+          });
+        }
       }
     } catch (error) {
-      if (error.message.includes('Invalid')) {
-        throw error;
-      }
-      throw new Error('Invalid number format for amount or price');
+      validationErrors.push({
+        field: 'amount',
+        message: 'Invalid number format for amount',
+        value: amount,
+      });
     }
 
+    try {
+      if (price && typeof price === 'string') {
+        const priceDecimal = new Decimal(price);
+        if (priceDecimal.lte(0)) {
+          validationErrors.push({
+            field: 'price',
+            message: 'Invalid price. Must be positive',
+            value: price,
+          });
+        }
+        if (priceDecimal.gt(new Decimal('1000000'))) {
+          validationErrors.push({
+            field: 'price',
+            message: 'Invalid price. Too large (max 1,000,000)',
+            value: price,
+          });
+        }
+      }
+    } catch (error) {
+      validationErrors.push({
+        field: 'price',
+        message: 'Invalid number format for price',
+        value: price,
+      });
+    }
+
+    // Validate pair
     if (pair && pair !== this.#pair) {
-      throw new Error(`Order pair ${pair} does not match orderbook pair ${this.#pair}`);
+      validationErrors.push({
+        field: 'pair',
+        message: `Order pair ${pair} does not match orderbook pair ${this.#pair}`,
+        value: pair,
+      });
+    }
+
+    // Throw validation error if any validation failed
+    if (validationErrors.length > 0) {
+      throw new OrderValidationError('Order validation failed', {
+        context: new ErrorContext()
+          .withOrder(orderData)
+          .withCustom('orderbook', { pair: this.#pair })
+          .build(),
+        validationErrors,
+        severity: ErrorSeverity.ERROR,
+        retryable: false,
+      });
     }
   }
 
@@ -479,9 +643,13 @@ export default class OrderBook {
    * @private
    */
   #updateLatencyMetrics(latency) {
-    this.#metrics.averageLatency =
-      (this.#metrics.averageLatency * (this.#metrics.totalOrders - 1) + latency) /
-      this.#metrics.totalOrders;
+    if (this.#metrics.totalOrders === 0) {
+      this.#metrics.averageLatency = latency;
+    } else {
+      this.#metrics.averageLatency =
+        (this.#metrics.averageLatency * (this.#metrics.totalOrders - 1) + latency) /
+        this.#metrics.totalOrders;
+    }
 
     this.#metrics.maxLatency = Math.max(this.#metrics.maxLatency, latency);
     this.#metrics.minLatency = Math.min(this.#metrics.minLatency, latency);
