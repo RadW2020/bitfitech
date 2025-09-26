@@ -448,10 +448,10 @@ export default class ExchangeClient {
    * @private
    */
   async #processOrderEvent(eventData) {
-    const { order } = eventData;
+    const { order, vectorClock } = eventData;
 
-    // Add order to local orderbook
-    const matchResult = await this.#orderbook.addOrder(order);
+    // Add order to local orderbook with vector clock
+    const matchResult = await this.#orderbook.addOrder(order, vectorClock);
 
     // Store order in history
     if (matchResult.remainingOrder) {
