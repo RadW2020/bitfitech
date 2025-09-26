@@ -6,6 +6,7 @@
 import { PeerRPCServer, PeerRPCClient } from 'grenache-nodejs-http';
 import Link from 'grenache-nodejs-link';
 import { randomUUID } from 'node:crypto';
+import CircuitBreaker from './circuit-breaker.js';
 
 /**
  * @typedef {Object} OrderMessage
@@ -38,10 +39,18 @@ export default class GrenacheService {
   #orderHandlers = new Set();
   #orderbookHandlers = new Set();
   #tradeHandlers = new Set();
+  #circuitBreaker = null;
 
   constructor(grapeUrl = 'http://127.0.0.1:30001') {
     this.#nodeId = randomUUID();
     this.#link = new Link({ grape: grapeUrl });
+
+    // Initialize circuit breaker for network operations
+    this.#circuitBreaker = new CircuitBreaker({
+      name: `grenache-${this.#nodeId.slice(0, 8)}`,
+      failureThreshold: 3, // Open after 3 failures
+      resetTimeout: 30000, // 30 seconds before retry
+    });
   }
 
   /**
@@ -168,7 +177,7 @@ export default class GrenacheService {
   }
 
   /**
-   * Distribute order to other nodes
+   * Distribute order to other nodes with circuit breaker protection
    * @param {Object} order - Order to distribute
    * @returns {Promise<OrderDistributionResult>} Distribution result
    */
@@ -186,7 +195,10 @@ export default class GrenacheService {
     };
 
     try {
-      const result = await this.#sendToAllNodes(message);
+      const result = await this.#circuitBreaker.execute(async () => {
+        return await this.#sendToAllNodes(message);
+      });
+
       return {
         success: result.success,
         distributedTo: result.successfulNodes,
@@ -203,7 +215,7 @@ export default class GrenacheService {
   }
 
   /**
-   * Broadcast trade to other nodes
+   * Broadcast trade to other nodes with circuit breaker protection
    * @param {Object} trade - Trade to broadcast
    * @returns {Promise<boolean>} Broadcast success
    */
@@ -221,7 +233,9 @@ export default class GrenacheService {
     };
 
     try {
-      const result = await this.#sendToAllNodes(message);
+      const result = await this.#circuitBreaker.execute(async () => {
+        return await this.#sendToAllNodes(message);
+      });
       return result.success;
     } catch (error) {
       console.error('❌ Failed to broadcast trade:', error);
@@ -230,7 +244,7 @@ export default class GrenacheService {
   }
 
   /**
-   * Sync orderbook with other nodes
+   * Sync orderbook with other nodes with circuit breaker protection
    * @param {Object} orderbook - Orderbook snapshot
    * @returns {Promise<boolean>} Sync success
    */
@@ -248,7 +262,9 @@ export default class GrenacheService {
     };
 
     try {
-      const result = await this.#sendToAllNodes(message);
+      const result = await this.#circuitBreaker.execute(async () => {
+        return await this.#sendToAllNodes(message);
+      });
       return result.success;
     } catch (error) {
       console.error('❌ Failed to sync orderbook:', error);
@@ -390,6 +406,29 @@ export default class GrenacheService {
         console.error('❌ Error in orderbook handler:', error);
       }
     });
+  }
+
+  /**
+   * Get circuit breaker status
+   * @returns {Object} Circuit breaker status
+   */
+  getCircuitBreakerStatus() {
+    return this.#circuitBreaker.getStatus();
+  }
+
+  /**
+   * Get circuit breaker metrics
+   * @returns {Object} Circuit breaker metrics
+   */
+  getCircuitBreakerMetrics() {
+    return this.#circuitBreaker.getMetrics();
+  }
+
+  /**
+   * Reset circuit breaker
+   */
+  resetCircuitBreaker() {
+    this.#circuitBreaker.reset();
   }
 
   /**
