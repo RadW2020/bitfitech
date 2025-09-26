@@ -48,7 +48,7 @@ export default class ExchangeClient {
     };
 
     this.#userId = this.#config.userId;
-    this.#orderbook = new OrderBook(this.#config.pair);
+    this.#orderbook = new OrderBook(this.#config.pair, this.#userId);
     this.#grenacheService = new GrenacheService(this.#config.grapeUrl);
   }
 
@@ -298,12 +298,12 @@ export default class ExchangeClient {
    */
   #setupMessageHandlers() {
     // Handle incoming orders from other nodes
-    this.#grenacheService.addOrderHandler(async order => {
+    this.#grenacheService.addOrderHandler(async (order, vectorClock) => {
       try {
         console.log(`📨 Processing order from other node: ${order.id}`);
 
-        // Add order to local orderbook
-        const matchResult = await this.#orderbook.addOrder(order);
+        // Add order to local orderbook with vector clock
+        const matchResult = await this.#orderbook.addOrder(order, vectorClock);
 
         // Store order in history
         if (matchResult.remainingOrder) {
@@ -333,7 +333,7 @@ export default class ExchangeClient {
     });
 
     // Handle incoming trades from other nodes
-    this.#grenacheService.addTradeHandler(trade => {
+    this.#grenacheService.addTradeHandler((trade, vectorClock) => {
       try {
         console.log(`💰 Received trade from other node: ${trade.id}`);
         this.#tradeHistory.push(trade);
@@ -343,7 +343,7 @@ export default class ExchangeClient {
     });
 
     // Handle orderbook sync from other nodes
-    this.#grenacheService.addOrderbookHandler(orderbook => {
+    this.#grenacheService.addOrderbookHandler((orderbook, vectorClock) => {
       try {
         console.log(`📊 Received orderbook sync from other node`);
         // In a more sophisticated implementation, we might merge orderbooks

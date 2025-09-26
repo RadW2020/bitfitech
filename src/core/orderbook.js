@@ -25,6 +25,7 @@ import {
 import { logger, LogLevel } from '../utils/logger.js';
 import config from '../utils/config.js';
 import { SecurityValidator } from '../utils/security.js';
+import { EventQueue } from '../utils/event-queue.js';
 
 /**
  * @typedef {Object} Order
@@ -68,6 +69,8 @@ export default class OrderBook {
   #orderCount = 0;
   #tradeCount = 0;
   #logger = null;
+  #eventQueue = null;
+  #lastOrderResult = null;
 
   // Performance metrics
   #metrics = {
@@ -78,12 +81,44 @@ export default class OrderBook {
     minLatency: Infinity,
   };
 
-  constructor(pair = 'BTC/USD') {
+  constructor(pair = 'BTC/USD', nodeId = null) {
     this.#pair = pair;
     this.#logger = logger.child({
       component: 'OrderBook',
       pair: this.#pair,
     });
+
+    // Initialize event queue for distributed ordering
+    this.#eventQueue = new EventQueue(nodeId || 'orderbook');
+
+    // Set up event handlers
+    this.#eventQueue.on('order', this.#handleOrderEvent.bind(this));
+    this.#eventQueue.on('trade', this.#handleTradeEvent.bind(this));
+  }
+
+  /**
+   * Handle order event from event queue
+   * @param {Object} event - Event data
+   * @param {Object} vectorClock - Vector clock
+   * @private
+   */
+  async #handleOrderEvent(event, vectorClock) {
+    this.#lastOrderResult = await this.#addOrderInternal(event.data);
+  }
+
+  /**
+   * Handle trade event from event queue
+   * @param {Object} event - Event data
+   * @param {Object} vectorClock - Vector clock
+   * @private
+   */
+  async #handleTradeEvent(event, vectorClock) {
+    // Handle trade events from other nodes
+    if (event.data && event.data.trades) {
+      this.#trades.push(...event.data.trades);
+      this.#tradeCount += event.data.trades.length;
+      this.#metrics.totalTrades += event.data.trades.length;
+    }
   }
 
   /**
@@ -119,11 +154,32 @@ export default class OrderBook {
   }
 
   /**
-   * Add a new order to the orderbook
+   * Add a new order to the orderbook with distributed event ordering
    * @param {Omit<Order, 'id'|'timestamp'|'status'>} orderData - Order data
+   * @param {Object} vectorClock - Vector clock for ordering (optional)
    * @returns {Promise<MatchResult>} Match result with trades and remaining order
    */
-  async addOrder(orderData) {
+  async addOrder(orderData, vectorClock = null) {
+    // Enqueue order event for distributed ordering
+    await this.#eventQueue.enqueue(
+      {
+        type: 'order',
+        data: orderData,
+      },
+      vectorClock
+    );
+
+    // Return the result from the event handler
+    return this.#lastOrderResult;
+  }
+
+  /**
+   * Add a new order to the orderbook (internal method)
+   * @param {Omit<Order, 'id'|'timestamp'|'status'>} orderData - Order data
+   * @returns {Promise<MatchResult>} Match result with trades and remaining order
+   * @private
+   */
+  async #addOrderInternal(orderData) {
     const startTime = process.hrtime.bigint();
 
     if (this.#isProcessing) {
@@ -691,7 +747,16 @@ export default class OrderBook {
       tradeCount: this.#tradeCount,
       buyLevels: this.#buyOrders.size,
       sellLevels: this.#sellOrders.size,
+      eventQueue: this.#eventQueue.getStatus(),
     };
+  }
+
+  /**
+   * Get vector clock for distributed ordering
+   * @returns {Object} Vector clock
+   */
+  getVectorClock() {
+    return this.#eventQueue.getVectorClock();
   }
 
   /**

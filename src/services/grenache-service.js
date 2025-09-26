@@ -17,6 +17,7 @@ import {
 } from '../utils/errors.js';
 import { logger, LogLevel } from '../utils/logger.js';
 import config from '../utils/config.js';
+import { VectorClock } from '../utils/vector-clock.js';
 
 /**
  * @typedef {Object} OrderMessage
@@ -24,6 +25,7 @@ import config from '../utils/config.js';
  * @property {string} type - Message type ('order', 'orderbook_sync', 'trade')
  * @property {string} fromNode - Source node ID
  * @property {Object} payload - Message payload
+ * @property {Object} vectorClock - Vector clock for distributed ordering
  * @property {number} timestamp - Message timestamp
  */
 
@@ -51,6 +53,7 @@ export default class GrenacheService {
   #tradeHandlers = new Set();
   #circuitBreaker = null;
   #logger = null;
+  #vectorClock = null;
 
   constructor(grapeUrl = null) {
     this.#nodeId = randomUUID();
@@ -68,6 +71,9 @@ export default class GrenacheService {
       failureThreshold: config.circuitBreaker.failureThreshold,
       resetTimeout: config.circuitBreaker.resetTimeoutMs,
     });
+
+    // Initialize vector clock for distributed ordering
+    this.#vectorClock = new VectorClock(this.#nodeId);
   }
 
   /**
@@ -214,11 +220,15 @@ export default class GrenacheService {
       });
     }
 
+    // Update vector clock for this event
+    this.#vectorClock.tick();
+
     const message = {
       id: randomUUID(),
       type: 'order',
       fromNode: this.#nodeId,
       payload: order,
+      vectorClock: this.#vectorClock.toObject(),
       timestamp: Date.now(),
     };
 
@@ -301,11 +311,15 @@ export default class GrenacheService {
       throw new Error('Grenache service not initialized');
     }
 
+    // Update vector clock for this event
+    this.#vectorClock.tick();
+
     const message = {
       id: randomUUID(),
       type: 'trade',
       fromNode: this.#nodeId,
       payload: trade,
+      vectorClock: this.#vectorClock.toObject(),
       timestamp: Date.now(),
     };
 
@@ -333,11 +347,15 @@ export default class GrenacheService {
       throw new Error('Grenache service not initialized');
     }
 
+    // Update vector clock for this event
+    this.#vectorClock.tick();
+
     const message = {
       id: randomUUID(),
       type: 'orderbook_sync',
       fromNode: this.#nodeId,
       payload: orderbook,
+      vectorClock: this.#vectorClock.toObject(),
       timestamp: Date.now(),
     };
 
@@ -411,6 +429,12 @@ export default class GrenacheService {
         return;
       }
 
+      // Update vector clock with incoming message
+      if (payload.vectorClock) {
+        const incomingClock = VectorClock.fromObject(payload.fromNode, payload.vectorClock);
+        this.#vectorClock.update(incomingClock);
+      }
+
       // Route message to appropriate handlers
       switch (payload.type) {
         case 'order':
@@ -445,10 +469,15 @@ export default class GrenacheService {
   #handleOrderMessage(message) {
     console.log(`📨 Received order from node ${message.fromNode}:`, message.payload.id);
 
-    // Notify all order handlers
+    // Create vector clock from message
+    const vectorClock = message.vectorClock
+      ? VectorClock.fromObject(message.fromNode, message.vectorClock)
+      : null;
+
+    // Notify all order handlers with vector clock
     this.#orderHandlers.forEach(handler => {
       try {
-        handler(message.payload);
+        handler(message.payload, vectorClock);
       } catch (error) {
         console.error('❌ Error in order handler:', error);
       }
@@ -463,10 +492,15 @@ export default class GrenacheService {
   #handleTradeMessage(message) {
     console.log(`💰 Received trade from node ${message.fromNode}:`, message.payload.id);
 
-    // Notify all trade handlers
+    // Create vector clock from message
+    const vectorClock = message.vectorClock
+      ? VectorClock.fromObject(message.fromNode, message.vectorClock)
+      : null;
+
+    // Notify all trade handlers with vector clock
     this.#tradeHandlers.forEach(handler => {
       try {
-        handler(message.payload);
+        handler(message.payload, vectorClock);
       } catch (error) {
         console.error('❌ Error in trade handler:', error);
       }
@@ -481,10 +515,15 @@ export default class GrenacheService {
   #handleOrderbookMessage(message) {
     console.log(`📊 Received orderbook sync from node ${message.fromNode}`);
 
-    // Notify all orderbook handlers
+    // Create vector clock from message
+    const vectorClock = message.vectorClock
+      ? VectorClock.fromObject(message.fromNode, message.vectorClock)
+      : null;
+
+    // Notify all orderbook handlers with vector clock
     this.#orderbookHandlers.forEach(handler => {
       try {
-        handler(message.payload);
+        handler(message.payload, vectorClock);
       } catch (error) {
         console.error('❌ Error in orderbook handler:', error);
       }
@@ -497,6 +536,14 @@ export default class GrenacheService {
    */
   getCircuitBreakerStatus() {
     return this.#circuitBreaker.getStatus();
+  }
+
+  /**
+   * Get current vector clock
+   * @returns {Object} Vector clock
+   */
+  getVectorClock() {
+    return this.#vectorClock.toObject();
   }
 
   /**
