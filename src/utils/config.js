@@ -140,6 +140,24 @@ class Configuration {
       url: ConfigValidator.toUrl(process.env.GRAPE_URL, 'http://127.0.0.1:30001'),
     };
 
+    // P2P Configuration (Always Enabled)
+    this.p2p = {
+      enabled: true, // P2P is always enabled - this is a true P2P exchange
+      port: ConfigValidator.toNumber(process.env.P2P_PORT, 3000, 1000, 65535),
+      host: ConfigValidator.toString(process.env.P2P_HOST, '0.0.0.0'),
+      enableMDNS: ConfigValidator.toBoolean(process.env.DISCOVERY_MDNS, true),
+      enableGrenache: ConfigValidator.toBoolean(process.env.DISCOVERY_GRENACHE, true),
+      bootstrapPeers: this.#parseBootstrapPeers(process.env.BOOTSTRAP_PEERS),
+      peerStoragePath: ConfigValidator.toString(process.env.PEER_STORAGE_PATH, '.peers.json'),
+      maxPeers: ConfigValidator.toNumber(process.env.MAX_PEERS, 50, 1, 1000),
+      peerReconnectInterval: ConfigValidator.toNumber(
+        process.env.PEER_RECONNECT_INTERVAL,
+        30000,
+        1000,
+        300000
+      ),
+    };
+
     // Exchange Configuration
     this.exchange = {
       pair: ConfigValidator.toString(process.env.EXCHANGE_PAIR, 'BTC/USD'),
@@ -201,6 +219,32 @@ class Configuration {
         300000
       ),
     };
+  }
+
+  /**
+   * Parse bootstrap peers from environment variable
+   * @private
+   * @param {string} peersStr - Comma-separated list of peers (host:port)
+   * @returns {Array<string>} Parsed peer addresses
+   */
+  #parseBootstrapPeers(peersStr) {
+    if (!peersStr || typeof peersStr !== 'string') {
+      return [];
+    }
+
+    return peersStr
+      .split(',')
+      .map((peer) => peer.trim())
+      .filter((peer) => {
+        // Validate format: host:port
+        const parts = peer.split(':');
+        if (parts.length !== 2) return false;
+
+        const [host, port] = parts;
+        const portNum = parseInt(port, 10);
+
+        return host && portNum >= 1000 && portNum <= 65535;
+      });
   }
 
   /**
