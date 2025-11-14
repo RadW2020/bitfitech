@@ -65,14 +65,24 @@ export default class ExchangeClient {
       grapeUrl: clientConfig.grenache?.url || clientConfig.grapeUrl || config.grenache.url,
       pair: clientConfig.exchange?.pair || clientConfig.pair || config.exchange.pair,
       userId: clientConfig.userId || randomUUID(),
-      // P2P Configuration (Always Enabled)
+      // P2P Configuration (Always Enabled - TRUE PEER-TO-PEER)
       p2p: {
         port: clientConfig.p2p?.port || config.p2p?.port || 3000,
         host: clientConfig.p2p?.host || config.p2p?.host || '0.0.0.0',
+
+        // Discovery strategies (all optional)
         enableMDNS: clientConfig.p2p?.enableMDNS !== false && config.p2p?.enableMDNS !== false,
         enableGrenache:
           clientConfig.p2p?.enableGrenache !== false && config.p2p?.enableGrenache !== false,
+        enablePeerExchange:
+          clientConfig.p2p?.enablePeerExchange !== false && config.p2p?.enablePeerExchange !== false,
+
+        // Bootstrap configuration
         bootstrapPeers: clientConfig.p2p?.bootstrapPeers || config.p2p?.bootstrapPeers || [],
+        useWellKnownNodes:
+          clientConfig.p2p?.useWellKnownNodes !== false && config.p2p?.useWellKnownNodes !== false,
+
+        // Peer management
         peerStoragePath: clientConfig.p2p?.peerStoragePath || config.p2p?.peerStoragePath,
       },
     };
@@ -158,7 +168,9 @@ export default class ExchangeClient {
       bootstrapPeers: p2pConfig.bootstrapPeers,
       enableMDNS: p2pConfig.enableMDNS,
       enableGrenache: p2pConfig.enableGrenache,
-      enablePeerExchange: true,
+      enablePeerExchange: p2pConfig.enablePeerExchange !== false,
+      useWellKnownNodes: p2pConfig.useWellKnownNodes !== false,
+      network: process.env.NETWORK || 'local',
     });
 
     // Create message router

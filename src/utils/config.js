@@ -140,23 +140,33 @@ class Configuration {
       url: ConfigValidator.toUrl(process.env.GRAPE_URL, 'http://127.0.0.1:30001'),
     };
 
-    // Embedded Grape Configuration (True P2P - each node runs its own Grape)
+    // Embedded Grape Configuration (Optional DHT - for large networks)
+    // NOTE: This is OPTIONAL. The system works perfectly fine without it using pure P2P.
     this.embeddedGrape = {
-      enabled: ConfigValidator.toBoolean(process.env.EMBEDDED_GRAPE, true),
+      enabled: ConfigValidator.toBoolean(process.env.EMBEDDED_GRAPE, false), // Disabled by default - pure P2P is default
       dhtPort: ConfigValidator.toNumber(process.env.GRAPE_DHT_PORT, 20001, 1000, 65535),
       apiPort: ConfigValidator.toNumber(process.env.GRAPE_API_PORT, 30001, 1000, 65535),
       bootstrapNodes: this.#parseBootstrapNodes(process.env.GRAPE_BOOTSTRAP_NODES),
       host: ConfigValidator.toString(process.env.GRAPE_HOST, '127.0.0.1'),
     };
 
-    // P2P Configuration (Always Enabled)
+    // P2P Configuration (Always Enabled - THIS IS THE CORE)
+    // TRUE PEER-TO-PEER: Direct TCP connections between nodes, no central servers required
     this.p2p = {
       enabled: true, // P2P is always enabled - this is a true P2P exchange
       port: ConfigValidator.toNumber(process.env.P2P_PORT, 3000, 1000, 65535),
       host: ConfigValidator.toString(process.env.P2P_HOST, '0.0.0.0'),
-      enableMDNS: ConfigValidator.toBoolean(process.env.DISCOVERY_MDNS, true),
-      enableGrenache: ConfigValidator.toBoolean(process.env.DISCOVERY_GRENACHE, true),
+
+      // Discovery strategies (all optional, pick what suits your network)
+      enableMDNS: ConfigValidator.toBoolean(process.env.DISCOVERY_MDNS, true), // Local network discovery
+      enableGrenache: ConfigValidator.toBoolean(process.env.DISCOVERY_GRENACHE, false), // DHT discovery (disabled by default)
+      enablePeerExchange: ConfigValidator.toBoolean(process.env.DISCOVERY_PEER_EXCHANGE, true), // Peer list sharing
+
+      // Bootstrap configuration
       bootstrapPeers: this.#parseBootstrapPeers(process.env.BOOTSTRAP_PEERS),
+      useWellKnownNodes: ConfigValidator.toBoolean(process.env.USE_WELL_KNOWN_NODES, true), // Use hardcoded bootstrap nodes
+
+      // Peer management
       peerStoragePath: ConfigValidator.toString(process.env.PEER_STORAGE_PATH, '.peers.json'),
       maxPeers: ConfigValidator.toNumber(process.env.MAX_PEERS, 50, 1, 1000),
       peerReconnectInterval: ConfigValidator.toNumber(
@@ -464,8 +474,12 @@ class Configuration {
       p2p: {
         enabled: this.p2p.enabled,
         port: this.p2p.port,
+        mode: this.embeddedGrape.enabled ? 'P2P + DHT' : 'Pure P2P',
         enableMDNS: this.p2p.enableMDNS,
         enableGrenache: this.p2p.enableGrenache,
+        enablePeerExchange: this.p2p.enablePeerExchange,
+        useWellKnownNodes: this.p2p.useWellKnownNodes,
+        bootstrapPeers: this.p2p.bootstrapPeers.length,
       },
       performance: {
         thresholdMs: this.performance.thresholdMs,

@@ -13,6 +13,7 @@ import dgram from 'dgram';
 import EventEmitter from 'events';
 import { MessageType, PeerMessage } from './peer-protocol.js';
 import { logger, LogLevel } from '../utils/logger.js';
+import { getBootstrapNodes, getRecommendedBootstrapCount, BOOTSTRAP_CONFIG } from './well-known-nodes.js';
 
 /**
  * mDNS configuration
@@ -54,7 +55,17 @@ export class PeerDiscovery extends EventEmitter {
     this.#port = port;
     this.#peerManager = peerManager;
     this.#grenacheService = options.grenacheService || null;
-    this.#bootstrapPeers = options.bootstrapPeers || [];
+
+    // Combine custom bootstrap peers with well-known nodes
+    const useWellKnownNodes = options.useWellKnownNodes !== false;
+    const network = options.network || process.env.NETWORK || 'local';
+    const customBootstrap = options.bootstrapPeers || [];
+
+    // Get combined bootstrap nodes (custom + well-known)
+    this.#bootstrapPeers = useWellKnownNodes
+      ? getBootstrapNodes(network, customBootstrap)
+      : customBootstrap;
+
     this.#enableMDNS = options.enableMDNS !== false;
     this.#enableGrenache = options.enableGrenache !== false;
     this.#enablePeerExchange = options.enablePeerExchange !== false;
@@ -66,6 +77,15 @@ export class PeerDiscovery extends EventEmitter {
       component: 'PeerDiscovery',
       nodeId: nodeId.slice(0, 8),
     });
+
+    // Log bootstrap configuration
+    if (this.#bootstrapPeers.length > 0) {
+      this.#logger.system(LogLevel.INFO, 'Bootstrap nodes configured', {
+        count: this.#bootstrapPeers.length,
+        useWellKnown: useWellKnownNodes,
+        network,
+      });
+    }
   }
 
   /**
