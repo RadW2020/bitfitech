@@ -1,10 +1,8 @@
 /**
- * Message Router
+ * Message Router - Pure P2P
  *
- * Intelligent message routing with fallback strategies:
- * 1. Try direct P2P connection (primary)
- * 2. Try Grenache DHT (fallback, if available)
- * 3. Queue for later delivery
+ * Direct peer-to-peer message routing with intelligent broadcast.
+ * NO fallbacks, NO alternative strategies - just direct TCP connections.
  */
 
 import EventEmitter from 'events';
@@ -25,11 +23,11 @@ class QueuedMessage {
 }
 
 /**
- * Message router class
+ * Pure P2P Message Router
+ * Routes messages via direct TCP connections only
  */
 export class MessageRouter extends EventEmitter {
   #directConnectionService;
-  #grenacheService;
   #peerManager;
   #messageQueue;
   #maxQueueSize;
@@ -50,7 +48,6 @@ export class MessageRouter extends EventEmitter {
     super();
 
     this.#directConnectionService = directConnectionService;
-    this.#grenacheService = options.grenacheService || null;
     this.#peerManager = peerManager;
     this.#messageQueue = [];
     this.#maxQueueSize = options.maxQueueSize || 1000;
@@ -68,14 +65,14 @@ export class MessageRouter extends EventEmitter {
    * Start message router
    */
   start() {
-    this.#logger.system(LogLevel.INFO, 'Starting message router');
+    this.#logger.system(LogLevel.INFO, 'Starting pure P2P message router');
 
     // Start queue processor
     this.#queueProcessor = setInterval(() => {
       this.#processQueue();
     }, this.#retryDelay);
 
-    this.#logger.system(LogLevel.INFO, 'Message router started');
+    this.#logger.system(LogLevel.INFO, 'Pure P2P message router started');
   }
 
   /**
@@ -96,167 +93,102 @@ export class MessageRouter extends EventEmitter {
   }
 
   /**
-   * Send message to a specific peer
+   * Send message to a specific peer via direct P2P connection
    * @param {string} peerId - Peer identifier
    * @param {Object} message - Message to send
    * @returns {Promise<void>}
    */
   async sendToPeer(peerId, message) {
-    // Try direct connection first
+    // Direct P2P connection only - no fallbacks
     if (this.#directConnectionService.isConnected(peerId)) {
       try {
         await this.#directConnectionService.sendMessage(peerId, message);
-        this.#logger.system(LogLevel.DEBUG, 'Message sent via direct connection', { peerId, type: message.type });
+        this.#logger.system(LogLevel.DEBUG, 'Message sent via direct P2P', { peerId, type: message.type });
         return;
       } catch (err) {
-        this.#logger.system(LogLevel.WARN, 'Direct connection failed, trying fallback', {
+        this.#logger.system(LogLevel.WARN, 'Direct P2P send failed, queuing', {
           peerId,
           error: err.message,
         });
       }
     }
 
-    // Try Grenache fallback
-    if (this.#grenacheService) {
-      try {
-        await this.#sendViaGrenache(peerId, message);
-        this.#logger.system(LogLevel.DEBUG, 'Message sent via Grenache', { peerId, type: message.type });
-        return;
-      } catch (err) {
-        this.#logger.system(LogLevel.WARN, 'Grenache send failed', { peerId, error: err.message });
-      }
-    }
-
-    // Queue for later delivery
+    // Queue for retry when peer reconnects
     this.#queueMessage(peerId, message);
     this.#logger.system(LogLevel.DEBUG, 'Message queued for later delivery', { peerId, type: message.type });
   }
 
   /**
-   * Broadcast message to all peers
+   * Broadcast message to all connected peers via direct P2P
    * @param {Object} message - Message to broadcast
    * @returns {Promise<Object>} Broadcast results
    */
   async broadcast(message) {
     const results = {
-      direct: [],
-      grenache: null,
+      successful: [],
+      failed: [],
       queued: [],
-      errors: [],
     };
 
     // Check for duplicates
     const messageHash = this.#hashMessage(message);
     if (this.#isDuplicate(messageHash)) {
-      this.#logger.system(LogLevel.DEBUG, 'Duplicate message detected, skipping broadcast', { hash: messageHash });
+      this.#logger.system(LogLevel.DEBUG, 'Duplicate message detected, skipping', { hash: messageHash });
       return results;
     }
 
     // Mark as seen
     this.#markSeen(messageHash);
 
-    // Broadcast via direct connections
+    // Broadcast via direct P2P connections only
     const connectedPeers = this.#peerManager.getHealthyPeers();
 
     for (const peer of connectedPeers) {
       try {
         await this.#directConnectionService.sendMessage(peer.nodeId, message);
-        results.direct.push(peer.nodeId);
+        results.successful.push(peer.nodeId);
       } catch (err) {
-        this.#logger.system(LogLevel.DEBUG, 'Direct broadcast failed to peer', {
+        this.#logger.system(LogLevel.DEBUG, 'P2P broadcast failed to peer', {
           peerId: peer.nodeId,
           error: err.message,
         });
-        results.errors.push({ peerId: peer.nodeId, error: err.message });
+        results.failed.push({ peerId: peer.nodeId, error: err.message });
       }
     }
 
-    // Also send via Grenache (if available) for redundancy
-    if (this.#grenacheService) {
-      try {
-        await this.#broadcastViaGrenache(message);
-        results.grenache = 'sent';
-      } catch (err) {
-        this.#logger.system(LogLevel.DEBUG, 'Grenache broadcast failed', { error: err.message });
-        results.grenache = 'failed';
-      }
-    }
-
-    this.#logger.system(LogLevel.INFO, 'Broadcast complete', {
+    this.#logger.system(LogLevel.INFO, 'P2P broadcast complete', {
       type: message.type,
-      direct: results.direct.length,
-      grenache: results.grenache,
-      errors: results.errors.length,
+      successful: results.successful.length,
+      failed: results.failed.length,
     });
 
     return results;
   }
 
   /**
-   * Route message intelligently
+   * Route message via direct P2P
    * @param {Object} message - Message to route
    * @returns {Promise<void>}
    */
   async route(message) {
-    // Determine routing based on message type
+    // All messages broadcast via direct P2P
     switch (message.type) {
       case MessageType.ORDER:
       case MessageType.TRADE:
       case MessageType.CANCEL_ORDER:
-        // Broadcast to all peers
         return this.broadcast(message);
 
       case MessageType.PEER_EXCHANGE:
       case MessageType.PEER_EXCHANGE_REQUEST:
-        // Send to specific peer if specified
         if (message.to) {
           return this.sendToPeer(message.to, message);
         }
         break;
 
       default:
-        // Unknown message type, try broadcast
-        this.#logger.system(LogLevel.WARN, 'Unknown message type, broadcasting', { type: message.type });
+        this.#logger.system(LogLevel.WARN, 'Unknown message type', { type: message.type });
         return this.broadcast(message);
     }
-  }
-
-  /**
-   * Send message via Grenache
-   * @private
-   * @param {string} peerId - Peer identifier
-   * @param {Object} message - Message
-   * @returns {Promise<void>}
-   */
-  async #sendViaGrenache(peerId, message) {
-    if (!this.#grenacheService) {
-      throw new Error('Grenache service not available');
-    }
-
-    // Note: Actual implementation depends on GrenacheService API
-    // This is a placeholder
-    this.#logger.system(LogLevel.DEBUG, 'Sending via Grenache', { peerId, type: message.type });
-
-    // The actual Grenache service should have a method to send to specific peer
-    // For now, we'll emit an event that can be handled by the integration layer
-    this.emit('grenache:send', { peerId, message });
-  }
-
-  /**
-   * Broadcast message via Grenache
-   * @private
-   * @param {Object} message - Message
-   * @returns {Promise<void>}
-   */
-  async #broadcastViaGrenache(message) {
-    if (!this.#grenacheService) {
-      throw new Error('Grenache service not available');
-    }
-
-    this.#logger.system(LogLevel.DEBUG, 'Broadcasting via Grenache', { type: message.type });
-
-    // Emit event for integration layer to handle
-    this.emit('grenache:broadcast', { message });
   }
 
   /**
@@ -345,22 +277,19 @@ export class MessageRouter extends EventEmitter {
    * @returns {string} Message hash
    */
   #hashMessage(message) {
-    // Simple hash based on message content
     const content = JSON.stringify({
       type: message.type,
       nodeId: message.nodeId,
       timestamp: message.timestamp,
-      // Include type-specific fields
       orderId: message.order?.id,
       tradeId: message.trade?.id,
     });
 
-    // Simple hash function (could use crypto.createHash for better hash)
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
       hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
+      hash = hash & hash;
     }
 
     return hash.toString(36);
@@ -382,10 +311,9 @@ export class MessageRouter extends EventEmitter {
    * @param {string} hash - Message hash
    */
   #markSeen(hash) {
-    // Add to cache with expiration
     this.#deduplicationCache.set(hash, Date.now());
 
-    // Cleanup old entries if cache is too large
+    // Cleanup old entries
     if (this.#deduplicationCache.size > this.#deduplicationCacheSize) {
       const now = Date.now();
       const expirationTime = 60000; // 1 minute
@@ -396,7 +324,7 @@ export class MessageRouter extends EventEmitter {
         }
       }
 
-      // If still too large, remove oldest entries
+      // If still too large, remove oldest
       if (this.#deduplicationCache.size > this.#deduplicationCacheSize) {
         const entries = Array.from(this.#deduplicationCache.entries());
         entries.sort((a, b) => a[1] - b[1]);
@@ -415,10 +343,10 @@ export class MessageRouter extends EventEmitter {
    */
   getStats() {
     return {
+      mode: 'Pure P2P',
       queueSize: this.#messageQueue.length,
       maxQueueSize: this.#maxQueueSize,
       deduplicationCacheSize: this.#deduplicationCache.size,
-      hasGrenache: !!this.#grenacheService,
     };
   }
 
