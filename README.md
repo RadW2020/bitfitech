@@ -20,19 +20,61 @@ Read [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed explanation.
 
 ---
 
+## 📋 Prerequisites
+
+Before getting started, ensure you have the following:
+
+### System Requirements
+
+- **Node.js**: >= 20.19.5 (check with `node --version`)
+- **npm**: >= 8.0.0 (check with `npm --version`)
+- **Memory**: Minimum 512MB RAM per node (recommended 1GB for development)
+- **Operating Systems**: Linux, macOS, Windows (WSL recommended for Windows)
+
+### Network Requirements
+
+**Default ports** (can be customized via environment variables):
+
+- **P2P Port**: 3000 (for peer-to-peer connections)
+- **Grape DHT Port**: 20001 (for Kademlia DHT)
+- **Grape API Port**: 30001 (for Grape HTTP API)
+
+**Firewall**: Ensure these ports are accessible if running across different machines/networks.
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/RadW2020/bitfitech.git
+cd bitfitech
+
+# Install dependencies
+npm install
+```
+
+**Note**: If you see dependency vulnerabilities, you can safely ignore them for development or run `npm audit fix` to address them.
+
+---
+
 ## 🚀 Quick Start
 
 ### Zero-Configuration Start (Recommended)
 
-Each node runs its own Grape DHT server (Grenache) - fully distributed:
+Get started in **3 simple steps**:
+
+**Step 1**: Ensure you've installed dependencies (see [Prerequisites](#-prerequisites) above)
 
 ```bash
-# Install dependencies
 npm install
+```
 
-# Start first node (embedded Grape DHT)
+**Step 2**: Start your first node
+
+```bash
 npm start
 ```
+
+**Step 3**: Done! Your node is now running and will automatically discover peers.
 
 **What happens:**
 1. Starts embedded Grape DHT server (Kademlia)
@@ -375,6 +417,198 @@ This is a **permissionless network**:
 - Peer whitelisting
 - Network access control
 - Byzantine fault tolerance
+
+---
+
+## 🔧 Troubleshooting
+
+### Common Issues and Solutions
+
+#### Problem: Port Already in Use
+
+**Error**: `EADDRINUSE: address already in use 0.0.0.0:3000`
+
+**Solution**: Another process is using the default port. Change the port using environment variables:
+
+```bash
+# Change P2P port
+P2P_PORT=3001 npm start
+
+# For multiple nodes on same machine
+P2P_PORT=3001 GRAPE_DHT_PORT=20002 GRAPE_API_PORT=30002 npm start
+```
+
+**Alternative**: Find and stop the process using the port:
+
+```bash
+# Linux/macOS
+lsof -ti:3000 | xargs kill -9
+
+# Windows
+netstat -ano | findstr :3000
+taskkill /PID <PID> /F
+```
+
+---
+
+#### Problem: Nodes Not Discovering Each Other
+
+**Symptoms**: Node starts but doesn't connect to peers
+
+**Solutions**:
+
+1. **Check firewall settings**: Ensure ports are not blocked
+   ```bash
+   # Linux: Allow ports through firewall
+   sudo ufw allow 3000/tcp
+   sudo ufw allow 20001/tcp
+   sudo ufw allow 30001/tcp
+   ```
+
+2. **Verify mDNS is enabled** (for local network discovery):
+   ```bash
+   # Check environment variable
+   echo $DISCOVERY_MDNS  # Should be 'true' or empty
+   ```
+
+3. **Use manual bootstrap peers**:
+   ```bash
+   # Connect to specific peer
+   BOOTSTRAP_PEERS=192.168.1.100:3000 npm start
+   ```
+
+4. **Check if Grenache is running** (if using embedded mode):
+   - Look for "Grape DHT server started" in logs
+   - Verify ports 20001 and 30001 are listening
+
+---
+
+#### Problem: Node.js Version Mismatch
+
+**Error**: `The engine "node" is incompatible with this module`
+
+**Solution**: Update Node.js to version 20.19.5 or higher:
+
+```bash
+# Using nvm (recommended)
+nvm install 20.19.5
+nvm use 20.19.5
+
+# Verify version
+node --version
+```
+
+---
+
+#### Problem: Memory/Performance Issues
+
+**Symptoms**: Slow performance, high memory usage
+
+**Solutions**:
+
+1. **Reduce maximum peers**:
+   ```bash
+   MAX_PEERS=25 npm start
+   ```
+
+2. **Increase Node.js memory limit**:
+   ```bash
+   NODE_OPTIONS="--max-old-space-size=2048" npm start
+   ```
+
+3. **Disable verbose logging in production**:
+   ```bash
+   LOG_LEVEL=warn NODE_ENV=production npm start
+   ```
+
+---
+
+#### Problem: Tests Failing
+
+**Common causes**:
+
+1. **Port conflicts**: Other tests or processes using ports
+   ```bash
+   # Kill all node processes
+   pkill -9 node
+
+   # Run tests again
+   npm test
+   ```
+
+2. **Timeout issues**: Increase test timeout
+   ```bash
+   # Edit vitest.config.js to increase timeout
+   ```
+
+3. **Clean start**: Remove generated files
+   ```bash
+   rm -f .peers*.json
+   npm test
+   ```
+
+---
+
+#### Problem: Connection Timeouts
+
+**Error**: `Connection timeout` or `Socket closed before connection`
+
+**Solutions**:
+
+1. **Increase timeout values** in `.env`:
+   ```bash
+   PEER_RECONNECT_INTERVAL=60000  # 60 seconds
+   ```
+
+2. **Check network connectivity**:
+   ```bash
+   # Test connection to peer
+   nc -zv 127.0.0.1 3000
+
+   # Or using telnet
+   telnet 127.0.0.1 3000
+   ```
+
+3. **Disable rate limiting** during development:
+   ```bash
+   ENABLE_RATE_LIMIT=false npm start
+   ```
+
+---
+
+#### Problem: Orderbook Inconsistencies
+
+**Symptoms**: Different orderbook states across nodes
+
+**Solutions**:
+
+1. **Wait for synchronization**: Give nodes time to sync (2-5 seconds)
+
+2. **Check peer connections**:
+   - Verify all nodes are connected to each other
+   - Check logs for "Peer connected" messages
+
+3. **Restart all nodes** for clean state:
+   ```bash
+   # Stop all nodes
+   pkill -9 node
+
+   # Clean peer storage
+   rm -f .peers*.json
+
+   # Start nodes again
+   ```
+
+---
+
+### Getting More Help
+
+If you encounter issues not covered here:
+
+1. **Check logs**: Set `LOG_LEVEL=debug` for detailed information
+2. **Search existing issues**: [GitHub Issues](https://github.com/RadW2020/bitfitech/issues)
+3. **Open a new issue**: Include logs, environment details, and steps to reproduce
+4. **Join discussions**: [GitHub Discussions](https://github.com/RadW2020/bitfitech/discussions)
 
 ---
 
