@@ -13,3 +13,7 @@ docs/
 
 logs
 
+# P2P peer storage (runtime generated)
+.peers.json
+*.peers.json
+
