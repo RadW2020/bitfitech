@@ -135,9 +135,46 @@ class Configuration {
       maxSizeMB: ConfigValidator.toNumber(process.env.LOG_MAX_SIZE_MB, 10, 1, 1000),
     };
 
-    // Grenache Configuration
+    // Grenache Configuration (Legacy - for external Grape servers)
     this.grenache = {
       url: ConfigValidator.toUrl(process.env.GRAPE_URL, 'http://127.0.0.1:30001'),
+    };
+
+    // Embedded Grape Configuration (REQUIRED - fulfills "Use Grenache" requirement)
+    // Each node runs its own Grape DHT server for distributed peer discovery
+    this.embeddedGrape = {
+      enabled: ConfigValidator.toBoolean(process.env.EMBEDDED_GRAPE, true), // Enabled by default per requirements
+      dhtPort: ConfigValidator.toNumber(process.env.GRAPE_DHT_PORT, 20001, 1000, 65535),
+      apiPort: ConfigValidator.toNumber(process.env.GRAPE_API_PORT, 30001, 1000, 65535),
+      bootstrapNodes: this.#parseBootstrapNodes(process.env.GRAPE_BOOTSTRAP_NODES),
+      host: ConfigValidator.toString(process.env.GRAPE_HOST, '127.0.0.1'),
+    };
+
+    // P2P Configuration (Always Enabled)
+    // Direct TCP connections between nodes with Grenache for communication
+    this.p2p = {
+      enabled: true, // P2P is always enabled
+      port: ConfigValidator.toNumber(process.env.P2P_PORT, 3000, 1000, 65535),
+      host: ConfigValidator.toString(process.env.P2P_HOST, '0.0.0.0'),
+
+      // Discovery strategies
+      enableMDNS: ConfigValidator.toBoolean(process.env.DISCOVERY_MDNS, true), // Local network discovery
+      enableGrenache: ConfigValidator.toBoolean(process.env.DISCOVERY_GRENACHE, true), // Grenache DHT (REQUIRED per spec)
+      enablePeerExchange: ConfigValidator.toBoolean(process.env.DISCOVERY_PEER_EXCHANGE, true), // Peer list sharing
+
+      // Bootstrap configuration
+      bootstrapPeers: this.#parseBootstrapPeers(process.env.BOOTSTRAP_PEERS),
+      useWellKnownNodes: ConfigValidator.toBoolean(process.env.USE_WELL_KNOWN_NODES, true), // Use hardcoded bootstrap nodes
+
+      // Peer management
+      peerStoragePath: ConfigValidator.toString(process.env.PEER_STORAGE_PATH, '.peers.json'),
+      maxPeers: ConfigValidator.toNumber(process.env.MAX_PEERS, 50, 1, 1000),
+      peerReconnectInterval: ConfigValidator.toNumber(
+        process.env.PEER_RECONNECT_INTERVAL,
+        30000,
+        1000,
+        300000
+      ),
     };
 
     // Exchange Configuration
@@ -204,6 +241,58 @@ class Configuration {
   }
 
   /**
+   * Parse bootstrap peers from environment variable
+   * @private
+   * @param {string} peersStr - Comma-separated list of peers (host:port)
+   * @returns {Array<string>} Parsed peer addresses
+   */
+  #parseBootstrapPeers(peersStr) {
+    if (!peersStr || typeof peersStr !== 'string') {
+      return [];
+    }
+
+    return peersStr
+      .split(',')
+      .map((peer) => peer.trim())
+      .filter((peer) => {
+        // Validate format: host:port
+        const parts = peer.split(':');
+        if (parts.length !== 2) return false;
+
+        const [host, port] = parts;
+        const portNum = parseInt(port, 10);
+
+        return host && portNum >= 1000 && portNum <= 65535;
+      });
+  }
+
+  /**
+   * Parse bootstrap nodes for Grape DHT
+   * @private
+   * @param {string} nodesStr - Comma-separated list of DHT nodes (host:port)
+   * @returns {Array<string>} Parsed node addresses
+   */
+  #parseBootstrapNodes(nodesStr) {
+    if (!nodesStr || typeof nodesStr !== 'string') {
+      return [];
+    }
+
+    return nodesStr
+      .split(',')
+      .map((node) => node.trim())
+      .filter((node) => {
+        // Validate format: host:port
+        const parts = node.split(':');
+        if (parts.length !== 2) return false;
+
+        const [host, port] = parts;
+        const portNum = parseInt(port, 10);
+
+        return host && portNum >= 1000 && portNum <= 65535;
+      });
+  }
+
+  /**
    * Validate configuration
    * @private
    */
@@ -223,6 +312,19 @@ class Configuration {
     // Validate port conflicts
     if (this.exchange.port === this.monitoring.metricsPort) {
       errors.push('Exchange port and metrics port cannot be the same');
+    }
+
+    // Validate embedded Grape port conflicts
+    if (this.embeddedGrape.enabled) {
+      if (this.embeddedGrape.dhtPort === this.embeddedGrape.apiPort) {
+        errors.push('Grape DHT port and API port cannot be the same');
+      }
+      if (
+        this.embeddedGrape.apiPort === this.exchange.port ||
+        this.embeddedGrape.apiPort === this.monitoring.metricsPort
+      ) {
+        errors.push('Grape API port conflicts with other services');
+      }
     }
 
     // Validate performance thresholds
@@ -257,6 +359,8 @@ class Configuration {
     const baseConfig = {
       logging: this.logging,
       grenache: this.grenache,
+      embeddedGrape: this.embeddedGrape,
+      p2p: this.p2p,
       exchange: this.exchange,
       performance: this.performance,
       circuitBreaker: this.circuitBreaker,
@@ -360,6 +464,22 @@ class Configuration {
       },
       grenache: {
         url: this.grenache.url,
+      },
+      embeddedGrape: {
+        enabled: this.embeddedGrape.enabled,
+        dhtPort: this.embeddedGrape.dhtPort,
+        apiPort: this.embeddedGrape.apiPort,
+        bootstrapNodes: this.embeddedGrape.bootstrapNodes,
+      },
+      p2p: {
+        enabled: this.p2p.enabled,
+        port: this.p2p.port,
+        mode: this.embeddedGrape.enabled ? 'P2P + DHT' : 'Pure P2P',
+        enableMDNS: this.p2p.enableMDNS,
+        enableGrenache: this.p2p.enableGrenache,
+        enablePeerExchange: this.p2p.enablePeerExchange,
+        useWellKnownNodes: this.p2p.useWellKnownNodes,
+        bootstrapPeers: this.p2p.bootstrapPeers.length,
       },
       performance: {
         thresholdMs: this.performance.thresholdMs,

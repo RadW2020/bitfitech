@@ -515,15 +515,24 @@ export default class GrenacheService {
    * Destroy the service
    */
   destroy() {
-    if (this.#link) {
-      this.#link.stop();
+    // Only destroy if initialized
+    if (!this.#isInitialized) {
+      return;
     }
-    
+
+    if (this.#link) {
+      try {
+        this.#link.stop();
+      } catch (err) {
+        // Ignore errors during shutdown
+      }
+    }
+
     // Destroy rate limiter
     if (this.#rateLimiter) {
       this.#rateLimiter.destroy();
     }
-    
+
     this.#isInitialized = false;
     this.#logger.system(LogLevel.INFO, 'Grenache service destroyed', {
       nodeId: this.#nodeId,
