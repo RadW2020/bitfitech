@@ -140,26 +140,26 @@ class Configuration {
       url: ConfigValidator.toUrl(process.env.GRAPE_URL, 'http://127.0.0.1:30001'),
     };
 
-    // Embedded Grape Configuration (Optional DHT - for large networks)
-    // NOTE: This is OPTIONAL. The system works perfectly fine without it using pure P2P.
+    // Embedded Grape Configuration (REQUIRED - fulfills "Use Grenache" requirement)
+    // Each node runs its own Grape DHT server for distributed peer discovery
     this.embeddedGrape = {
-      enabled: ConfigValidator.toBoolean(process.env.EMBEDDED_GRAPE, false), // Disabled by default - pure P2P is default
+      enabled: ConfigValidator.toBoolean(process.env.EMBEDDED_GRAPE, true), // Enabled by default per requirements
       dhtPort: ConfigValidator.toNumber(process.env.GRAPE_DHT_PORT, 20001, 1000, 65535),
       apiPort: ConfigValidator.toNumber(process.env.GRAPE_API_PORT, 30001, 1000, 65535),
       bootstrapNodes: this.#parseBootstrapNodes(process.env.GRAPE_BOOTSTRAP_NODES),
       host: ConfigValidator.toString(process.env.GRAPE_HOST, '127.0.0.1'),
     };
 
-    // P2P Configuration (Always Enabled - THIS IS THE CORE)
-    // TRUE PEER-TO-PEER: Direct TCP connections between nodes, no central servers required
+    // P2P Configuration (Always Enabled)
+    // Direct TCP connections between nodes with Grenache for communication
     this.p2p = {
-      enabled: true, // P2P is always enabled - this is a true P2P exchange
+      enabled: true, // P2P is always enabled
       port: ConfigValidator.toNumber(process.env.P2P_PORT, 3000, 1000, 65535),
       host: ConfigValidator.toString(process.env.P2P_HOST, '0.0.0.0'),
 
-      // Discovery strategies (all optional, pick what suits your network)
+      // Discovery strategies
       enableMDNS: ConfigValidator.toBoolean(process.env.DISCOVERY_MDNS, true), // Local network discovery
-      enableGrenache: ConfigValidator.toBoolean(process.env.DISCOVERY_GRENACHE, false), // DHT discovery (disabled by default)
+      enableGrenache: ConfigValidator.toBoolean(process.env.DISCOVERY_GRENACHE, true), // Grenache DHT (REQUIRED per spec)
       enablePeerExchange: ConfigValidator.toBoolean(process.env.DISCOVERY_PEER_EXCHANGE, true), // Peer list sharing
 
       // Bootstrap configuration

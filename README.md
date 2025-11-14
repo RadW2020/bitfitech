@@ -5,16 +5,16 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 
-## 🎯 What Makes This TRUE P2P?
+## 🎯 Core Features
 
-✅ **No Central Servers** - Each node runs independently
-✅ **Direct TCP Connections** - Peers communicate directly
-✅ **Decentralized Discovery** - Find peers without central registry
-✅ **Self-Organizing Network** - No coordinator needed
-✅ **Distributed Orderbook** - Full replication across nodes
-✅ **Censorship Resistant** - No single point of failure
+✅ **Distributed Orderbook** - Each client has its own orderbook instance
+✅ **Order Distribution** - Orders distributed to all peer instances via Grenache
+✅ **Match & Remainder** - Matched order remainders added to orderbook
+✅ **Grenache Communication** - Uses Grenache DHT for inter-node communication
+✅ **Embedded Grape** - Each node runs its own Grape DHT server
+✅ **No Central Servers** - Fully distributed Kademlia DHT network
 
-**This is REAL peer-to-peer.** Like BitTorrent. Like Bitcoin. **No central infrastructure.**
+**Built to spec:** Uses Grenache for communication between nodes, with each client maintaining its own orderbook instance.
 
 Read [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed explanation.
 
@@ -24,22 +24,22 @@ Read [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed explanation.
 
 ### Zero-Configuration Start (Recommended)
 
-Just run it. No servers, no config, no hassle:
+Each node runs its own Grape DHT server (Grenache) - fully distributed:
 
 ```bash
 # Install dependencies
 npm install
 
-# Start node (uses well-known bootstrap nodes automatically)
+# Start first node (embedded Grape DHT)
 npm start
 ```
 
-**That's it!** Your node will:
-1. Start P2P server on port 3000
-2. Discover peers via mDNS (local network)
-3. Connect to well-known bootstrap nodes
-4. Join the distributed network
-5. Replicate orderbook from peers
+**What happens:**
+1. Starts embedded Grape DHT server (Kademlia)
+2. Starts P2P server on port 3000
+3. Discovers peers via Grenache DHT + mDNS
+4. Initializes local orderbook
+5. Distributes orders via Grenache to all peers
 
 ### Multi-Node Local Network
 
@@ -66,17 +66,22 @@ P2P_PORT=3003 npm start
 
 ## 📚 Configuration
 
-### Default Configuration (Pure P2P)
+### Default Configuration (Grenache + P2P)
 
-**No configuration needed!** Defaults are optimized for true P2P:
+**No configuration needed!** Defaults fulfill original requirements:
 
 ```javascript
 {
+  "embeddedGrape": {
+    "enabled": true,              // Each node runs Grape DHT
+    "dhtPort": 20001,             // Kademlia DHT port
+    "apiPort": 30001              // Grape HTTP API port
+  },
   "p2p": {
     "enabled": true,              // Always on
     "port": 3000,                 // P2P listening port
     "enableMDNS": true,           // Local network discovery
-    "enableGrenache": false,      // DHT disabled (pure P2P)
+    "enableGrenache": true,       // Grenache DHT (REQUIRED per spec)
     "enablePeerExchange": true,   // Peers share peer lists
     "useWellKnownNodes": true     // Use community bootstrap nodes
   }
@@ -112,63 +117,58 @@ EXCHANGE_PAIR=BTC/USD              # Trading pair
 
 ## 🌐 Operating Modes
 
-### 1️⃣ Pure P2P Mode (DEFAULT - Recommended)
+### 1️⃣ Grenache + P2P Mode (DEFAULT - Per Spec)
 
-**TRUE PEER-TO-PEER** - No DHT, no servers, just peers.
+**Uses Grenache for communication** - Fulfills original requirements.
 
 ```bash
 npm start
 ```
 
 **Features:**
+- Embedded Grape DHT (Kademlia) in each node
+- Grenache for order distribution between nodes
 - Direct TCP peer connections
 - mDNS local discovery
-- Well-known bootstrap nodes
 - Peer exchange protocol
-- Persistent peer storage
+- Well-known bootstrap nodes
 
 **Perfect for:**
-- Maximum decentralization
-- Local/regional networks
-- Privacy-focused deployments
-- Simple setup
+- Production deployments
+- Meets "Use Grenache" requirement
+- Distributed Kademlia DHT
+- No external infrastructure
 
-**Is this TRUE P2P?** ✅ **YES**
+**Is this TRUE P2P?** ✅ **YES** (distributed DHT, no central servers)
 
 ---
 
-### 2️⃣ P2P + DHT Mode (Optional)
+### 2️⃣ Pure P2P Mode (Optional - Without Grenache)
 
-**For large-scale networks** - Add Kademlia DHT for faster peer discovery.
+**For simple local testing only** - Disables Grenache (not per spec).
 
 ```bash
-EMBEDDED_GRAPE=true \
-GRAPE_DHT_PORT=20001 \
-GRAPE_API_PORT=30001 \
-GRAPE_BOOTSTRAP_NODES=dht1.example.com:20001 \
+EMBEDDED_GRAPE=false \
+DISCOVERY_GRENACHE=false \
+P2P_PORT=3001 \
 npm start
 ```
 
-**Additional Features:**
-- Embedded Kademlia DHT (each node runs own DHT server)
-- Distributed hash table
-- Faster peer discovery
-- Better for global networks
+**Features:**
+- Direct TCP connections only
+- mDNS local discovery
+- Peer exchange
+- No DHT
 
-**Perfect for:**
-- Large networks (100+ nodes)
-- Global deployments
-- Faster peer discovery
-
-**Is this TRUE P2P?** ✅ **YES** (each node runs own DHT)
+**Note:** Does NOT fulfill "Use Grenache" requirement. Use only for local testing.
 
 ---
 
-### 3️⃣ Legacy Grenache Mode (NOT Recommended)
+### 3️⃣ Legacy Grenache Mode (External Grape Servers)
 
-**DO NOT USE** unless you need legacy compatibility.
+**Requires manual Grape servers** - Not recommended (centralized).
 
-Requires external Grape servers (centralized).
+See [EMBEDDED_GRAPE_DHT.md](./EMBEDDED_GRAPE_DHT.md) for details.
 
 ---
 
@@ -382,17 +382,21 @@ This is a **permissionless network**:
 
 ### Q: Do I need to run Grape servers?
 
-**A: NO!** By default, this uses pure P2P with no external dependencies.
+**A: NO external servers needed!** Each node runs its own embedded Grape DHT server. It's fully distributed - no central Grape infrastructure required.
+
+### Q: Why Grenache?
+
+**A: Project requirement.** The original spec requires "Use Grenache for communication between nodes". We fulfill this with embedded Grape (distributed DHT) in each node.
 
 ### Q: Are bootstrap nodes "centralized"?
 
-**A: No.** They're just entry points. After first connection:
-- You remember peers in `.peers.json`
-- You use peer exchange to find more peers
-- You don't need bootstrap anymore
+**A: No.** They're entry points for DHT discovery. After first connection:
+- Your node joins the Kademlia DHT
+- You discover more peers via DHT
+- Peers remembered in `.peers.json`
 - Any node can be a bootstrap node
 
-Like Bitcoin's DNS seeds - helpful but not required.
+Like Bitcoin's DNS seeds or BitTorrent DHT bootstrap.
 
 ### Q: Can this work completely offline?
 
