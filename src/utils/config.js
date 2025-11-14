@@ -140,9 +140,9 @@ class Configuration {
       url: ConfigValidator.toUrl(process.env.GRAPE_URL, 'http://127.0.0.1:30001'),
     };
 
-    // P2P Configuration
+    // P2P Configuration (Always Enabled)
     this.p2p = {
-      enabled: ConfigValidator.toBoolean(process.env.P2P_ENABLED, true),
+      enabled: true, // P2P is always enabled - this is a true P2P exchange
       port: ConfigValidator.toNumber(process.env.P2P_PORT, 3000, 1000, 65535),
       host: ConfigValidator.toString(process.env.P2P_HOST, '0.0.0.0'),
       enableMDNS: ConfigValidator.toBoolean(process.env.DISCOVERY_MDNS, true),

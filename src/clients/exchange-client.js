@@ -54,12 +54,11 @@ export default class ExchangeClient {
   #pendingEvents = new Map(); // For event ordering
   #lastProcessedClock = new Map(); // Track last processed vector clock per node
 
-  // P2P Components
+  // P2P Components (Always Enabled)
   #peerManager = null;
   #directConnectionService = null;
   #peerDiscovery = null;
   #messageRouter = null;
-  #p2pEnabled = true;
   #hasGrenache = false;
 
   constructor(clientConfig) {
@@ -67,9 +66,8 @@ export default class ExchangeClient {
       grapeUrl: clientConfig.grenache?.url || clientConfig.grapeUrl || config.grenache.url,
       pair: clientConfig.exchange?.pair || clientConfig.pair || config.exchange.pair,
       userId: clientConfig.userId || randomUUID(),
-      // P2P Configuration
+      // P2P Configuration (Always Enabled)
       p2p: {
-        enabled: clientConfig.p2p?.enabled !== false && config.p2p?.enabled !== false,
         port: clientConfig.p2p?.port || config.p2p?.port || 3000,
         host: clientConfig.p2p?.host || config.p2p?.host || '0.0.0.0',
         enableMDNS: clientConfig.p2p?.enableMDNS !== false && config.p2p?.enableMDNS !== false,
@@ -81,14 +79,11 @@ export default class ExchangeClient {
     };
 
     this.#userId = this.#config.userId;
-    this.#p2pEnabled = this.#config.p2p.enabled;
     this.#orderbook = new OrderBook(this.#config.pair, this.#userId);
     this.#grenacheService = new GrenacheService(this.#config.grapeUrl);
 
-    // Initialize P2P components if enabled
-    if (this.#p2pEnabled) {
-      this.#initializeP2PComponents();
-    }
+    // Initialize P2P components (always enabled)
+    this.#initializeP2PComponents();
   }
 
   /**
@@ -176,7 +171,7 @@ export default class ExchangeClient {
     }
 
     try {
-      // Try to initialize Grenache service (optional now)
+      // Try to initialize Grenache service (optional)
       try {
         await this.#grenacheService.initialize();
         this.#hasGrenache = true;
@@ -184,37 +179,31 @@ export default class ExchangeClient {
       } catch (error) {
         logger.warn('Grenache not available, running in pure P2P mode', { error: error.message });
         this.#hasGrenache = false;
-
-        if (!this.#p2pEnabled) {
-          throw new Error('Neither P2P nor Grenache available - cannot initialize');
-        }
       }
 
-      // Initialize P2P system if enabled
-      if (this.#p2pEnabled) {
-        logger.info('Initializing P2P system');
+      // Initialize P2P system (always enabled)
+      logger.info('Initializing P2P system');
 
-        // Initialize peer manager
-        await this.#peerManager.initialize();
+      // Initialize peer manager
+      await this.#peerManager.initialize();
 
-        // Start direct connection service
-        await this.#directConnectionService.start();
+      // Start direct connection service
+      await this.#directConnectionService.start();
 
-        // Start message router
-        this.#messageRouter.start();
+      // Start message router
+      this.#messageRouter.start();
 
-        // Set up P2P event handlers
-        this.#setupP2PEventHandlers();
+      // Set up P2P event handlers
+      this.#setupP2PEventHandlers();
 
-        // Start peer discovery
-        await this.#peerDiscovery.start();
+      // Start peer discovery
+      await this.#peerDiscovery.start();
 
-        logger.info('P2P system initialized', {
-          port: this.#config.p2p.port,
-          mdns: this.#config.p2p.enableMDNS,
-          bootstrapPeers: this.#config.p2p.bootstrapPeers.length,
-        });
-      }
+      logger.info('P2P system initialized', {
+        port: this.#config.p2p.port,
+        mdns: this.#config.p2p.enableMDNS,
+        bootstrapPeers: this.#config.p2p.bootstrapPeers.length,
+      });
 
       // Set up message handlers (Grenache if available)
       if (this.#hasGrenache) {
@@ -225,7 +214,6 @@ export default class ExchangeClient {
       logger.info('Exchange client initialized', {
         userId: this.#userId,
         pair: this.#config.pair,
-        p2pEnabled: this.#p2pEnabled,
         hasGrenache: this.#hasGrenache,
       });
     } catch (error) {
@@ -368,35 +356,24 @@ export default class ExchangeClient {
       // Store trades in history
       this.#tradeHistory.push(...matchResult.trades);
 
-      // Distribute order to other nodes
+      // Distribute order to other nodes via P2P (Grenache used as fallback if enabled)
       let distribution = { success: false, distributedTo: [], failedTo: [] };
       if (order) {
         try {
-          // Use hybrid routing (P2P + Grenache)
-          if (this.#p2pEnabled && this.#messageRouter) {
-            const orderMessage = PeerMessage.order(this.#userId, order);
-            await this.#messageRouter.broadcast(orderMessage);
-            logger.info('Order distributed via hybrid P2P');
-            distribution = { success: true, distributedTo: ['p2p'], failedTo: [] };
-          } else if (this.#hasGrenache) {
-            distribution = await this.#grenacheService.distributeOrder(order);
-            logger.info(`Order distributed to ${distribution.distributedTo.length} nodes via Grenache`);
-          }
+          const orderMessage = PeerMessage.order(this.#userId, order);
+          await this.#messageRouter.broadcast(orderMessage);
+          logger.info('Order distributed via P2P');
+          distribution = { success: true, distributedTo: ['p2p'], failedTo: [] };
         } catch (error) {
           logger.error('Failed to distribute order', { error: error.message });
         }
       }
 
-      // Broadcast trades to other nodes
+      // Broadcast trades to other nodes via P2P
       for (const trade of matchResult.trades) {
         try {
-          // Use hybrid routing (P2P + Grenache)
-          if (this.#p2pEnabled && this.#messageRouter) {
-            const tradeMessage = PeerMessage.trade(this.#userId, trade);
-            await this.#messageRouter.broadcast(tradeMessage);
-          } else if (this.#hasGrenache) {
-            await this.#grenacheService.broadcastTrade(trade);
-          }
+          const tradeMessage = PeerMessage.trade(this.#userId, trade);
+          await this.#messageRouter.broadcast(tradeMessage);
         } catch (error) {
           logger.error('Failed to broadcast trade', { error: error.message });
         }
@@ -767,12 +744,7 @@ export default class ExchangeClient {
    * @returns {Object} P2P stats
    */
   getP2PStats() {
-    if (!this.#p2pEnabled) {
-      return { enabled: false };
-    }
-
     return {
-      enabled: true,
       hasGrenache: this.#hasGrenache,
       peers: this.#peerManager?.getStats() || {},
       discovery: this.#peerDiscovery?.getStats() || {},
@@ -784,33 +756,31 @@ export default class ExchangeClient {
   async destroy() {
     logger.info('Destroying exchange client');
 
-    // Stop P2P components
-    if (this.#p2pEnabled) {
-      try {
-        // Stop peer discovery
-        if (this.#peerDiscovery) {
-          await this.#peerDiscovery.stop();
-        }
-
-        // Stop message router
-        if (this.#messageRouter) {
-          this.#messageRouter.stop();
-        }
-
-        // Cleanup peer manager (saves peers to disk)
-        if (this.#peerManager) {
-          await this.#peerManager.cleanup();
-        }
-
-        // Stop direct connection service
-        if (this.#directConnectionService) {
-          await this.#directConnectionService.stop();
-        }
-
-        logger.info('P2P components stopped');
-      } catch (error) {
-        logger.error('Error stopping P2P components', { error: error.message });
+    // Stop P2P components (always running)
+    try {
+      // Stop peer discovery
+      if (this.#peerDiscovery) {
+        await this.#peerDiscovery.stop();
       }
+
+      // Stop message router
+      if (this.#messageRouter) {
+        this.#messageRouter.stop();
+      }
+
+      // Cleanup peer manager (saves peers to disk)
+      if (this.#peerManager) {
+        await this.#peerManager.cleanup();
+      }
+
+      // Stop direct connection service
+      if (this.#directConnectionService) {
+        await this.#directConnectionService.stop();
+      }
+
+      logger.info('P2P components stopped');
+    } catch (error) {
+      logger.error('Error stopping P2P components', { error: error.message });
     }
 
     // Stop Grenache service

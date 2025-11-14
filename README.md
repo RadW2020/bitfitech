@@ -4,11 +4,12 @@
 
 ## ✨ What's New: Truly Decentralized P2P
 
-This exchange now operates in **three modes**:
+This exchange now operates in **two modes**:
 
 1. **🔥 Pure P2P Mode** (Truly Decentralized) - No external servers required!
 2. **⚡ Hybrid Mode** - P2P connections + Grenache for faster discovery
-3. **🔄 Legacy Mode** - Grenache-only (backwards compatible)
+
+**P2P is always enabled** - this is a true peer-to-peer exchange with no legacy centralized mode.
 
 ### Key Features
 
@@ -30,13 +31,13 @@ This exchange now operates in **three modes**:
 npm install
 
 # 2. Start first node
-P2P_ENABLED=true P2P_PORT=3001 DISCOVERY_GRENACHE=false npm start
+P2P_PORT=3001 DISCOVERY_GRENACHE=false npm start
 
 # 3. Start second node (connects to first)
-P2P_ENABLED=true P2P_PORT=3002 BOOTSTRAP_PEERS=127.0.0.1:3001 DISCOVERY_GRENACHE=false npm start
+P2P_PORT=3002 BOOTSTRAP_PEERS=127.0.0.1:3001 DISCOVERY_GRENACHE=false npm start
 
 # 4. Start third node (connects to both)
-P2P_ENABLED=true P2P_PORT=3003 BOOTSTRAP_PEERS=127.0.0.1:3001,127.0.0.1:3002 DISCOVERY_GRENACHE=false npm start
+P2P_PORT=3003 BOOTSTRAP_PEERS=127.0.0.1:3001,127.0.0.1:3002 DISCOVERY_GRENACHE=false npm start
 ```
 
 **That's it!** The nodes will:
@@ -62,22 +63,13 @@ grape --dp 20002 --aph 40001 --bn '127.0.0.1:20001'
 
 # 3. Start exchange nodes (will use both P2P and Grenache)
 # Terminal 3
-P2P_ENABLED=true P2P_PORT=3001 npm start
+P2P_PORT=3001 npm start
 
 # Terminal 4
-P2P_ENABLED=true P2P_PORT=3002 npm start
+P2P_PORT=3002 npm start
 
 # Terminal 5
-P2P_ENABLED=true P2P_PORT=3003 npm start
-```
-
-### Option C: Legacy Mode (Grenache Only)
-
-Backwards compatible with original implementation.
-
-```bash
-# Same as before - Grenache required
-P2P_ENABLED=false npm start
+P2P_PORT=3003 npm start
 ```
 
 ## 🔧 How It Works
@@ -133,8 +125,7 @@ npm run test -- test/integration/pure-p2p.test.js
 Configure via environment variables (see `.env.example`):
 
 ```bash
-# P2P Settings
-P2P_ENABLED=true                    # Enable P2P mode
+# P2P Settings (Always Enabled)
 P2P_PORT=3000                       # TCP port for P2P connections
 P2P_HOST=0.0.0.0                    # Bind address
 
@@ -156,22 +147,14 @@ GRAPE_URL=http://127.0.0.1:30001   # Grenache URL (only if DISCOVERY_GRENACHE=tr
 
 **Pure P2P (no Grenache):**
 ```bash
-P2P_ENABLED=true
 DISCOVERY_GRENACHE=false
 BOOTSTRAP_PEERS=192.168.1.100:3000,192.168.1.101:3000
 ```
 
 **Hybrid (P2P + Grenache):**
 ```bash
-P2P_ENABLED=true
 DISCOVERY_GRENACHE=true
 DISCOVERY_MDNS=true
-GRAPE_URL=http://127.0.0.1:30001
-```
-
-**Legacy (Grenache only):**
-```bash
-P2P_ENABLED=false
 GRAPE_URL=http://127.0.0.1:30001
 ```
 

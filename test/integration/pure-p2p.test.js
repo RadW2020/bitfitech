@@ -14,11 +14,11 @@ describe('Pure P2P Mode (No Grenache)', () => {
 
   beforeAll(async () => {
     // Create 3 clients in pure P2P mode (Grenache disabled)
+    // P2P is always enabled now, just configure discovery
     client1 = new ExchangeClient({
       userId: 'pure-p2p-user-1',
       pair: 'BTC/USD',
       p2p: {
-        enabled: true,
         port: 13001,
         host: '127.0.0.1',
         enableMDNS: false, // Disable for tests
@@ -35,7 +35,6 @@ describe('Pure P2P Mode (No Grenache)', () => {
       userId: 'pure-p2p-user-2',
       pair: 'BTC/USD',
       p2p: {
-        enabled: true,
         port: 13002,
         host: '127.0.0.1',
         enableMDNS: false,
@@ -52,7 +51,6 @@ describe('Pure P2P Mode (No Grenache)', () => {
       userId: 'pure-p2p-user-3',
       pair: 'BTC/USD',
       p2p: {
-        enabled: true,
         port: 13003,
         host: '127.0.0.1',
         enableMDNS: false,
@@ -86,7 +84,7 @@ describe('Pure P2P Mode (No Grenache)', () => {
     expect(client2.isInitialized).toBe(true);
     expect(client3.isInitialized).toBe(true);
 
-    // Verify Grenache is NOT available
+    // Verify Grenache is NOT available (P2P is always enabled)
     const stats1 = client1.getP2PStats();
     const stats2 = client2.getP2PStats();
     const stats3 = client3.getP2PStats();
@@ -95,9 +93,10 @@ describe('Pure P2P Mode (No Grenache)', () => {
     expect(stats2.hasGrenache).toBe(false);
     expect(stats3.hasGrenache).toBe(false);
 
-    expect(stats1.enabled).toBe(true);
-    expect(stats2.enabled).toBe(true);
-    expect(stats3.enabled).toBe(true);
+    // P2P is always enabled now - no need to check
+    expect(stats1.peers).toBeDefined();
+    expect(stats2.peers).toBeDefined();
+    expect(stats3.peers).toBeDefined();
   });
 
   it('should establish direct peer connections', () => {
@@ -191,30 +190,28 @@ describe('Pure P2P Mode (No Grenache)', () => {
     const stats2 = client2.getP2PStats();
     const stats3 = client3.getP2PStats();
 
-    console.log('\n📈 P2P Statistics:');
+    console.log('\n📈 P2P Statistics (P2P always enabled):');
     console.log('\nClient 1:');
-    console.log(`  Enabled: ${stats1.enabled}`);
     console.log(`  Has Grenache: ${stats1.hasGrenache}`);
     console.log(`  Connected Peers: ${stats1.peers.connectedPeers}`);
     console.log(`  Healthy Peers: ${stats1.peers.healthyPeers}`);
     console.log(`  Direct Connections: ${stats1.directConnection.connections}`);
 
     console.log('\nClient 2:');
-    console.log(`  Enabled: ${stats2.enabled}`);
     console.log(`  Has Grenache: ${stats2.hasGrenache}`);
     console.log(`  Connected Peers: ${stats2.peers.connectedPeers}`);
     console.log(`  Healthy Peers: ${stats2.peers.healthyPeers}`);
     console.log(`  Direct Connections: ${stats2.directConnection.connections}`);
 
     console.log('\nClient 3:');
-    console.log(`  Enabled: ${stats3.enabled}`);
     console.log(`  Has Grenache: ${stats3.hasGrenache}`);
     console.log(`  Connected Peers: ${stats3.peers.connectedPeers}`);
     console.log(`  Healthy Peers: ${stats3.peers.healthyPeers}`);
     console.log(`  Direct Connections: ${stats3.directConnection.connections}`);
 
-    expect(stats1.enabled).toBe(true);
-    expect(stats2.enabled).toBe(true);
-    expect(stats3.enabled).toBe(true);
+    // Verify P2P components are present
+    expect(stats1.peers).toBeDefined();
+    expect(stats2.peers).toBeDefined();
+    expect(stats3.peers).toBeDefined();
   });
 });
