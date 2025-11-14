@@ -17,7 +17,7 @@ import {
   MessageType,
   PeerMessage,
 } from '../p2p/index.js';
-import { createLogger } from '../utils/logger.js';
+import { logger, LogLevel } from '../utils/logger.js';
 
 /**
  * @typedef {Object} ExchangeConfig
@@ -40,8 +40,6 @@ import { createLogger } from '../utils/logger.js';
  * Main interface for interacting with the distributed exchange
  * Each client has its own orderbook and communicates with other clients via Grenache
  */
-const logger = createLogger('ExchangeClient');
-
 export default class ExchangeClient {
   #orderbook = null;
   #grenacheService = null;
@@ -53,6 +51,7 @@ export default class ExchangeClient {
   #rateLimiter = new MultiTierRateLimiter();
   #pendingEvents = new Map(); // For event ordering
   #lastProcessedClock = new Map(); // Track last processed vector clock per node
+  #logger = null;
 
   // P2P Components (Always Enabled)
   #peerManager = null;
@@ -79,6 +78,13 @@ export default class ExchangeClient {
     };
 
     this.#userId = this.#config.userId;
+
+    // Initialize logger
+    this.#logger = logger.child({
+      component: 'ExchangeClient',
+      userId: this.#userId.slice(0, 8),
+    });
+
     this.#orderbook = new OrderBook(this.#config.pair, this.#userId);
     this.#grenacheService = new GrenacheService(this.#config.grapeUrl);
 
@@ -172,17 +178,22 @@ export default class ExchangeClient {
 
     try {
       // Try to initialize Grenache service (optional)
-      try {
-        await this.#grenacheService.initialize();
-        this.#hasGrenache = true;
-        logger.info('Grenache service initialized');
-      } catch (error) {
-        logger.warn('Grenache not available, running in pure P2P mode', { error: error.message });
+      if (this.#config.p2p.enableGrenache) {
+        try {
+          await this.#grenacheService.initialize();
+          this.#hasGrenache = true;
+          this.#logger.system(LogLevel.INFO, 'Grenache service initialized');
+        } catch (error) {
+          this.#logger.system(LogLevel.WARN, 'Grenache not available, running in pure P2P mode', { error: error.message });
+          this.#hasGrenache = false;
+        }
+      } else {
+        this.#logger.system(LogLevel.INFO, 'Grenache disabled, running in pure P2P mode');
         this.#hasGrenache = false;
       }
 
       // Initialize P2P system (always enabled)
-      logger.info('Initializing P2P system');
+      this.#logger.system(LogLevel.INFO, 'Initializing P2P system');
 
       // Initialize peer manager
       await this.#peerManager.initialize();
@@ -199,7 +210,7 @@ export default class ExchangeClient {
       // Start peer discovery
       await this.#peerDiscovery.start();
 
-      logger.info('P2P system initialized', {
+      this.#logger.system(LogLevel.INFO, 'P2P system initialized', {
         port: this.#config.p2p.port,
         mdns: this.#config.p2p.enableMDNS,
         bootstrapPeers: this.#config.p2p.bootstrapPeers.length,
@@ -211,13 +222,13 @@ export default class ExchangeClient {
       }
 
       this.#isInitialized = true;
-      logger.info('Exchange client initialized', {
+      this.#logger.system(LogLevel.INFO, 'Exchange client initialized', {
         userId: this.#userId,
         pair: this.#config.pair,
         hasGrenache: this.#hasGrenache,
       });
     } catch (error) {
-      logger.error('Failed to initialize exchange client', { error: error.message });
+      this.#logger.error(LogLevel.ERROR, 'Failed to initialize exchange client', error);
       throw error;
     }
   }
@@ -362,10 +373,10 @@ export default class ExchangeClient {
         try {
           const orderMessage = PeerMessage.order(this.#userId, order);
           await this.#messageRouter.broadcast(orderMessage);
-          logger.info('Order distributed via P2P');
+          this.#logger.system(LogLevel.INFO, 'Order distributed via P2P');
           distribution = { success: true, distributedTo: ['p2p'], failedTo: [] };
         } catch (error) {
-          logger.error('Failed to distribute order', { error: error.message });
+          this.#logger.system(LogLevel.ERROR, 'Failed to distribute order', { error: error.message });
         }
       }
 
@@ -375,7 +386,7 @@ export default class ExchangeClient {
           const tradeMessage = PeerMessage.trade(this.#userId, trade);
           await this.#messageRouter.broadcast(tradeMessage);
         } catch (error) {
-          logger.error('Failed to broadcast trade', { error: error.message });
+          this.#logger.system(LogLevel.ERROR, 'Failed to broadcast trade', { error: error.message });
         }
       }
 
@@ -436,13 +447,13 @@ export default class ExchangeClient {
   #setupP2PEventHandlers() {
     // Handle peer connected
     this.#directConnectionService.on('peer:connected', (peerInfo) => {
-      logger.info('Peer connected', { peerId: peerInfo.nodeId });
+      this.#logger.system(LogLevel.INFO, 'Peer connected', { peerId: peerInfo.nodeId });
       this.#peerManager.addPeer(peerInfo);
     });
 
     // Handle peer disconnected
     this.#directConnectionService.on('peer:disconnected', ({ peerId, reason }) => {
-      logger.info('Peer disconnected', { peerId, reason });
+      this.#logger.system(LogLevel.INFO, 'Peer disconnected', { peerId, reason });
       this.#peerManager.removePeer(peerId, reason);
     });
 
@@ -460,7 +471,7 @@ export default class ExchangeClient {
     this.#peerManager.on('peer:heartbeat_needed', (peer) => {
       const heartbeat = PeerMessage.heartbeat(this.#userId);
       this.#directConnectionService.sendMessage(peer.nodeId, heartbeat).catch((err) => {
-        logger.debug('Failed to send heartbeat', { peerId: peer.nodeId, error: err.message });
+        this.#logger.system(LogLevel.DEBUG, 'Failed to send heartbeat', { peerId: peer.nodeId, error: err.message });
       });
     });
 
@@ -468,25 +479,25 @@ export default class ExchangeClient {
     this.#peerManager.on('peer:reconnect', async (peer) => {
       try {
         await this.#directConnectionService.connect(peer.address, peer.port);
-        logger.info('Peer reconnected', { peerId: peer.nodeId });
+        this.#logger.system(LogLevel.INFO, 'Peer reconnected', { peerId: peer.nodeId });
       } catch (err) {
-        logger.debug('Peer reconnection failed', { peerId: peer.nodeId, error: err.message });
+        this.#logger.system(LogLevel.DEBUG, 'Peer reconnection failed', { peerId: peer.nodeId, error: err.message });
         peer.failedConnections = (peer.failedConnections || 0) + 1;
       }
     });
 
     // Handle peer discovery
     this.#peerDiscovery.on('peer:discovered', async (peerInfo) => {
-      logger.info('Peer discovered', { source: peerInfo.source, address: peerInfo.address });
+      this.#logger.system(LogLevel.INFO, 'Peer discovered', { source: peerInfo.source, address: peerInfo.address });
 
       // Try to connect if not already connected
       const existingPeer = this.#peerManager.getPeer(peerInfo.nodeId);
       if (!existingPeer || existingPeer.status === 'disconnected') {
         try {
           await this.#directConnectionService.connect(peerInfo.address, peerInfo.port);
-          logger.info('Connected to discovered peer', { address: peerInfo.address });
+          this.#logger.system(LogLevel.INFO, 'Connected to discovered peer', { address: peerInfo.address });
         } catch (err) {
-          logger.debug('Failed to connect to discovered peer', { error: err.message });
+          this.#logger.system(LogLevel.DEBUG, 'Failed to connect to discovered peer', { error: err.message });
         }
       }
     });
@@ -497,7 +508,7 @@ export default class ExchangeClient {
       const peerExchange = PeerMessage.peerExchange(this.#userId, peers);
 
       this.#directConnectionService.sendMessage(peerId, peerExchange).catch((err) => {
-        logger.debug('Failed to send peer exchange', { peerId, error: err.message });
+        this.#logger.system(LogLevel.DEBUG, 'Failed to send peer exchange', { peerId, error: err.message });
       });
     });
 
@@ -512,7 +523,7 @@ export default class ExchangeClient {
             await this.#grenacheService.broadcastTrade(message.trade);
           }
         } catch (err) {
-          logger.error('Grenache fallback failed', { error: err.message });
+          this.#logger.system(LogLevel.ERROR, 'Grenache fallback failed', { error: err.message });
         }
       });
 
@@ -524,7 +535,7 @@ export default class ExchangeClient {
             await this.#grenacheService.broadcastTrade(message.trade);
           }
         } catch (err) {
-          logger.error('Grenache broadcast fallback failed', { error: err.message });
+          this.#logger.system(LogLevel.ERROR, 'Grenache broadcast fallback failed', { error: err.message });
         }
       });
     }
@@ -546,7 +557,7 @@ export default class ExchangeClient {
         break;
 
       case MessageType.TRADE:
-        this.#processEventWithOrdering('trade', {
+        await this.#processEventWithOrdering('trade', {
           trade: message.trade,
           vectorClock: null,
         });
@@ -563,7 +574,7 @@ export default class ExchangeClient {
         break;
 
       default:
-        logger.warn('Unknown P2P message type', { type: message.type, from: peerId });
+        this.#logger.system(LogLevel.WARN, 'Unknown P2P message type', { type: message.type, from: peerId });
     }
 
     // Update peer stats
@@ -664,7 +675,7 @@ export default class ExchangeClient {
       await this.#processOrderEvent(eventData);
       break;
     case 'trade':
-      this.#processTradeEvent(eventData);
+      await this.#processTradeEvent(eventData);
       break;
     default:
       console.warn(`Unknown event type: ${eventType}`);
@@ -694,12 +705,24 @@ export default class ExchangeClient {
     // Store trades in history
     this.#tradeHistory.push(...matchResult.trades);
 
-    // Broadcast trades to other nodes
+    // Broadcast trades to other nodes via P2P
     for (const trade of matchResult.trades) {
       try {
-        await this.#grenacheService.broadcastTrade(trade);
+        const tradeMessage = PeerMessage.trade(this.#userId, trade);
+        await this.#messageRouter.broadcast(tradeMessage);
       } catch (error) {
-        console.error('❌ Failed to broadcast trade:', error);
+        this.#logger.system(LogLevel.ERROR, 'Failed to broadcast trade via P2P', { error: error.message });
+      }
+    }
+
+    // Also broadcast trades via Grenache if available (for redundancy)
+    if (this.#hasGrenache) {
+      for (const trade of matchResult.trades) {
+        try {
+          await this.#grenacheService.broadcastTrade(trade);
+        } catch (error) {
+          console.error('❌ Failed to broadcast trade via Grenache:', error);
+        }
       }
     }
 
@@ -711,9 +734,17 @@ export default class ExchangeClient {
    * @param {Object} eventData - Trade event data
    * @private
    */
-  #processTradeEvent(eventData) {
+  async #processTradeEvent(eventData) {
     const { trade } = eventData;
     this.#tradeHistory.push(trade);
+
+    // Retransmit trade to other peers (MessageRouter handles deduplication)
+    try {
+      const tradeMessage = PeerMessage.trade(this.#userId, trade);
+      await this.#messageRouter.broadcast(tradeMessage);
+    } catch (error) {
+      this.#logger.system(LogLevel.DEBUG, 'Failed to retransmit trade', { error: error.message });
+    }
   }
 
 
@@ -754,7 +785,7 @@ export default class ExchangeClient {
   }
 
   async destroy() {
-    logger.info('Destroying exchange client');
+    this.#logger.system(LogLevel.INFO, 'Destroying exchange client');
 
     // Stop P2P components (always running)
     try {
@@ -778,9 +809,9 @@ export default class ExchangeClient {
         await this.#directConnectionService.stop();
       }
 
-      logger.info('P2P components stopped');
+      this.#logger.system(LogLevel.INFO, 'P2P components stopped');
     } catch (error) {
-      logger.error('Error stopping P2P components', { error: error.message });
+      this.#logger.system(LogLevel.ERROR, 'Error stopping P2P components', { error: error.message });
     }
 
     // Stop Grenache service
@@ -796,6 +827,6 @@ export default class ExchangeClient {
     this.#isInitialized = false;
     this.#pendingEvents.clear();
     this.#lastProcessedClock.clear();
-    logger.info('Exchange client destroyed');
+    this.#logger.system(LogLevel.INFO, 'Exchange client destroyed');
   }
 }

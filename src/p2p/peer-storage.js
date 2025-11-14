@@ -7,9 +7,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { createLogger } from '../utils/logger.js';
-
-const logger = createLogger('PeerStorage');
+import { logger, LogLevel } from '../utils/logger.js';
 
 /**
  * Peer storage class
@@ -19,6 +17,7 @@ export class PeerStorage {
   #maxPeers;
   #saveDebounceTimer;
   #saveDebounceDelay;
+  #logger;
 
   /**
    * Create peer storage instance
@@ -31,6 +30,9 @@ export class PeerStorage {
     this.#maxPeers = maxPeers;
     this.#saveDebounceDelay = saveDebounceDelay;
     this.#saveDebounceTimer = null;
+    this.#logger = logger.child({
+      component: 'PeerStorage',
+    });
   }
 
   /**
@@ -43,12 +45,12 @@ export class PeerStorage {
       const parsed = JSON.parse(data);
 
       if (!this.#validateStorageFormat(parsed)) {
-        logger.warn('Invalid peer storage format, ignoring file');
+        this.#logger.system(LogLevel.WARN, 'Invalid peer storage format, ignoring file');
         return [];
       }
 
       const peers = parsed.peers || [];
-      logger.info(`Loaded ${peers.length} peers from storage`);
+      this.#logger.system(LogLevel.INFO, `Loaded ${peers.length} peers from storage`);
 
       // Sort by lastSeen (most recent first)
       peers.sort((a, b) => b.lastSeen - a.lastSeen);
@@ -58,17 +60,17 @@ export class PeerStorage {
       const freshPeers = peers.filter((p) => p.lastSeen > sevenDaysAgo);
 
       if (freshPeers.length < peers.length) {
-        logger.info(`Filtered out ${peers.length - freshPeers.length} stale peers`);
+        this.#logger.system(LogLevel.INFO, `Filtered out ${peers.length - freshPeers.length} stale peers`);
       }
 
       return freshPeers;
     } catch (err) {
       if (err.code === 'ENOENT') {
-        logger.info('No peer storage file found, starting fresh');
+        this.#logger.system(LogLevel.INFO, 'No peer storage file found, starting fresh');
         return [];
       }
 
-      logger.error('Failed to load peers from storage', { error: err.message });
+      this.#logger.error(LogLevel.ERROR, 'Failed to load peers from storage', err);
       return [];
     }
   }
@@ -139,9 +141,9 @@ export class PeerStorage {
       await fs.writeFile(tempPath, json, 'utf8');
       await fs.rename(tempPath, this.#filePath);
 
-      logger.info(`Saved ${peersToStore.length} peers to storage`);
+      this.#logger.system(LogLevel.INFO, `Saved ${peersToStore.length} peers to storage`);
     } catch (err) {
-      logger.error('Failed to save peers to storage', { error: err.message });
+      this.#logger.error(LogLevel.ERROR, 'Failed to save peers to storage', err);
       throw err;
     }
   }
@@ -209,10 +211,10 @@ export class PeerStorage {
   async clear() {
     try {
       await fs.unlink(this.#filePath);
-      logger.info('Cleared peer storage');
+      this.#logger.system(LogLevel.INFO, 'Cleared peer storage');
     } catch (err) {
       if (err.code !== 'ENOENT') {
-        logger.error('Failed to clear peer storage', { error: err.message });
+        this.#logger.error(LogLevel.ERROR, 'Failed to clear peer storage', err);
         throw err;
       }
     }

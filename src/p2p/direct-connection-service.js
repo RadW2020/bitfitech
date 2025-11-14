@@ -17,9 +17,7 @@ import {
   serializeMessage,
   MessageParser,
 } from './peer-protocol.js';
-import { createLogger } from '../utils/logger.js';
-
-const logger = createLogger('DirectConnectionService');
+import { logger, LogLevel } from '../utils/logger.js';
 
 /**
  * Direct connection service class
@@ -32,6 +30,7 @@ export class DirectConnectionService extends EventEmitter {
   #isRunning;
   #connections;
   #pendingHandshakes;
+  #logger;
 
   /**
    * Create direct connection service
@@ -48,6 +47,10 @@ export class DirectConnectionService extends EventEmitter {
     this.#isRunning = false;
     this.#connections = new Map();
     this.#pendingHandshakes = new Map();
+    this.#logger = logger.child({
+      component: 'DirectConnectionService',
+      nodeId: nodeId.slice(0, 8),
+    });
   }
 
   /**
@@ -56,7 +59,7 @@ export class DirectConnectionService extends EventEmitter {
    */
   async start() {
     if (this.#isRunning) {
-      logger.warn('Direct connection service already running');
+      this.#logger.system(LogLevel.WARN, 'Direct connection service already running');
       return;
     }
 
@@ -66,13 +69,13 @@ export class DirectConnectionService extends EventEmitter {
       });
 
       this.#server.on('error', (err) => {
-        logger.error('Server error', { error: err.message });
+        this.#logger.error(LogLevel.ERROR, 'Server error', err);
         this.emit('error', err);
       });
 
       this.#server.listen(this.#port, this.#host, () => {
         this.#isRunning = true;
-        logger.info('Direct connection service started', {
+        this.#logger.system(LogLevel.INFO, 'Direct connection service started', {
           host: this.#host,
           port: this.#port,
           nodeId: this.#nodeId,
@@ -93,7 +96,7 @@ export class DirectConnectionService extends EventEmitter {
       return;
     }
 
-    logger.info('Stopping direct connection service');
+    this.#logger.system(LogLevel.INFO, 'Stopping direct connection service');
 
     // Close all connections
     for (const [peerId, conn] of this.#connections.entries()) {
@@ -105,7 +108,7 @@ export class DirectConnectionService extends EventEmitter {
       if (this.#server) {
         this.#server.close(() => {
           this.#isRunning = false;
-          logger.info('Direct connection service stopped');
+          this.#logger.system(LogLevel.INFO, 'Direct connection service stopped');
           resolve();
         });
       } else {
@@ -123,7 +126,7 @@ export class DirectConnectionService extends EventEmitter {
   async connect(address, port) {
     return new Promise((resolve, reject) => {
       const socket = net.createConnection({ host: address, port }, () => {
-        logger.info('Outbound connection established', { address, port });
+        this.#logger.system(LogLevel.INFO, 'Outbound connection established', { address, port });
       });
 
       const tempId = `${address}:${port}`;
@@ -174,14 +177,14 @@ export class DirectConnectionService extends EventEmitter {
       return;
     }
 
-    logger.info('Disconnecting peer', { peerId, reason });
+    this.#logger.system(LogLevel.INFO, 'Disconnecting peer', { peerId, reason });
 
     // Send disconnect message
     try {
       const disconnect = PeerMessage.disconnect(this.#nodeId, reason);
       await this.#sendRaw(conn.socket, disconnect);
     } catch (err) {
-      logger.debug('Error sending disconnect message', { error: err.message });
+      this.#logger.system(LogLevel.DEBUG, 'Error sending disconnect message', { error: err.message });
     }
 
     // Close socket
@@ -230,7 +233,7 @@ export class DirectConnectionService extends EventEmitter {
     for (const [peerId] of this.#connections) {
       promises.push(
         this.sendMessage(peerId, message).catch((err) => {
-          logger.error('Broadcast failed to peer', { peerId, error: err.message });
+          this.#logger.error(LogLevel.ERROR, 'Broadcast failed to peer', err);
           return { peerId, error: err };
         })
       );
@@ -274,11 +277,11 @@ export class DirectConnectionService extends EventEmitter {
     const port = socket.remotePort;
     const tempId = `${address}:${port}`;
 
-    logger.info('Incoming connection', { address, port });
+    this.#logger.system(LogLevel.INFO, 'Incoming connection', { address, port });
 
     const parser = new MessageParser();
     const handshakeTimeout = setTimeout(() => {
-      logger.warn('Inbound handshake timeout', { address, port });
+      this.#logger.system(LogLevel.WARN, 'Inbound handshake timeout', { address, port });
       socket.destroy();
       this.#pendingHandshakes.delete(tempId);
     }, ProtocolConstants.HANDSHAKE_TIMEOUT);
@@ -314,19 +317,19 @@ export class DirectConnectionService extends EventEmitter {
           this.#handleMessage(socket, tempId, message, inbound);
         }
       } catch (err) {
-        logger.error('Message parse error', { error: err.message });
+        this.#logger.error(LogLevel.ERROR, 'Message parse error', err);
         socket.destroy();
         this.#pendingHandshakes.delete(tempId);
       }
     });
 
     socket.on('error', (err) => {
-      logger.error('Socket error', { tempId, error: err.message });
+      this.#logger.error(LogLevel.ERROR, 'Socket error', err);
       this.#pendingHandshakes.delete(tempId);
     });
 
     socket.on('close', () => {
-      logger.debug('Socket closed', { tempId });
+      this.#logger.system(LogLevel.DEBUG, 'Socket closed', { tempId });
       this.#pendingHandshakes.delete(tempId);
 
       // Find and remove from connections
@@ -373,7 +376,7 @@ export class DirectConnectionService extends EventEmitter {
     }
 
     if (!peerId) {
-      logger.warn('Received message from unknown peer', { message });
+      this.#logger.system(LogLevel.WARN, 'Received message from unknown peer', { message });
       return;
     }
 
@@ -404,7 +407,7 @@ export class DirectConnectionService extends EventEmitter {
    */
   #handleHandshake(socket, tempId, message, inbound, pending) {
     if (!pending) {
-      logger.warn('Handshake for unknown connection', { tempId });
+      this.#logger.system(LogLevel.WARN, 'Handshake for unknown connection', { tempId });
       return;
     }
 
@@ -412,7 +415,7 @@ export class DirectConnectionService extends EventEmitter {
 
     // Validate protocol version
     if (version !== PROTOCOL_VERSION) {
-      logger.warn('Protocol version mismatch', { version, expected: PROTOCOL_VERSION });
+      this.#logger.system(LogLevel.WARN, 'Protocol version mismatch', { version, expected: PROTOCOL_VERSION });
       const error = PeerMessage.error(this.#nodeId, ErrorCode.PROTOCOL_VERSION_MISMATCH, 'Protocol version mismatch');
       this.#sendRaw(socket, error);
       socket.destroy();
@@ -422,7 +425,7 @@ export class DirectConnectionService extends EventEmitter {
 
     // Don't connect to ourselves
     if (nodeId === this.#nodeId) {
-      logger.debug('Rejecting self-connection');
+      this.#logger.system(LogLevel.DEBUG, 'Rejecting self-connection');
       socket.destroy();
       this.#pendingHandshakes.delete(tempId);
       return;
@@ -455,7 +458,7 @@ export class DirectConnectionService extends EventEmitter {
     this.#connections.set(nodeId, conn);
     this.#pendingHandshakes.delete(tempId);
 
-    logger.info('Peer handshake complete', { peerId: nodeId, inbound });
+    this.#logger.system(LogLevel.INFO, 'Peer handshake complete', { peerId: nodeId, inbound });
 
     this.emit('peer:connected', {
       nodeId,
@@ -478,14 +481,14 @@ export class DirectConnectionService extends EventEmitter {
    */
   #handleHandshakeAck(socket, tempId, message, pending) {
     if (!pending) {
-      logger.warn('Handshake ACK for unknown connection', { tempId });
+      this.#logger.system(LogLevel.WARN, 'Handshake ACK for unknown connection', { tempId });
       return;
     }
 
     clearTimeout(pending.handshakeTimeout);
     this.#pendingHandshakes.delete(tempId);
 
-    logger.debug('Received handshake ACK', { from: message.nodeId });
+    this.#logger.system(LogLevel.DEBUG, 'Received handshake ACK', { from: message.nodeId });
   }
 
   /**
@@ -498,7 +501,7 @@ export class DirectConnectionService extends EventEmitter {
     // Send heartbeat ACK
     const ack = PeerMessage.heartbeatAck(this.#nodeId);
     this.sendMessage(peerId, ack).catch((err) => {
-      logger.error('Failed to send heartbeat ACK', { peerId, error: err.message });
+      this.#logger.error(LogLevel.ERROR, 'Failed to send heartbeat ACK', err);
     });
 
     this.emit('peer:heartbeat', { peerId, message });

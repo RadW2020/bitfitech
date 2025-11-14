@@ -9,9 +9,7 @@
 
 import EventEmitter from 'events';
 import { MessageType } from './peer-protocol.js';
-import { createLogger } from '../utils/logger.js';
-
-const logger = createLogger('MessageRouter');
+import { logger, LogLevel } from '../utils/logger.js';
 
 /**
  * Message queue entry
@@ -40,6 +38,7 @@ export class MessageRouter extends EventEmitter {
   #queueProcessor;
   #deduplicationCache;
   #deduplicationCacheSize;
+  #logger;
 
   /**
    * Create message router instance
@@ -60,27 +59,30 @@ export class MessageRouter extends EventEmitter {
     this.#queueProcessor = null;
     this.#deduplicationCache = new Map();
     this.#deduplicationCacheSize = options.deduplicationCacheSize || 10000;
+    this.#logger = logger.child({
+      component: 'MessageRouter',
+    });
   }
 
   /**
    * Start message router
    */
   start() {
-    logger.info('Starting message router');
+    this.#logger.system(LogLevel.INFO, 'Starting message router');
 
     // Start queue processor
     this.#queueProcessor = setInterval(() => {
       this.#processQueue();
     }, this.#retryDelay);
 
-    logger.info('Message router started');
+    this.#logger.system(LogLevel.INFO, 'Message router started');
   }
 
   /**
    * Stop message router
    */
   stop() {
-    logger.info('Stopping message router');
+    this.#logger.system(LogLevel.INFO, 'Stopping message router');
 
     if (this.#queueProcessor) {
       clearInterval(this.#queueProcessor);
@@ -90,7 +92,7 @@ export class MessageRouter extends EventEmitter {
     // Clear queue
     this.#messageQueue = [];
 
-    logger.info('Message router stopped');
+    this.#logger.system(LogLevel.INFO, 'Message router stopped');
   }
 
   /**
@@ -104,10 +106,10 @@ export class MessageRouter extends EventEmitter {
     if (this.#directConnectionService.isConnected(peerId)) {
       try {
         await this.#directConnectionService.sendMessage(peerId, message);
-        logger.debug('Message sent via direct connection', { peerId, type: message.type });
+        this.#logger.system(LogLevel.DEBUG, 'Message sent via direct connection', { peerId, type: message.type });
         return;
       } catch (err) {
-        logger.warn('Direct connection failed, trying fallback', {
+        this.#logger.system(LogLevel.WARN, 'Direct connection failed, trying fallback', {
           peerId,
           error: err.message,
         });
@@ -118,16 +120,16 @@ export class MessageRouter extends EventEmitter {
     if (this.#grenacheService) {
       try {
         await this.#sendViaGrenache(peerId, message);
-        logger.debug('Message sent via Grenache', { peerId, type: message.type });
+        this.#logger.system(LogLevel.DEBUG, 'Message sent via Grenache', { peerId, type: message.type });
         return;
       } catch (err) {
-        logger.warn('Grenache send failed', { peerId, error: err.message });
+        this.#logger.system(LogLevel.WARN, 'Grenache send failed', { peerId, error: err.message });
       }
     }
 
     // Queue for later delivery
     this.#queueMessage(peerId, message);
-    logger.debug('Message queued for later delivery', { peerId, type: message.type });
+    this.#logger.system(LogLevel.DEBUG, 'Message queued for later delivery', { peerId, type: message.type });
   }
 
   /**
@@ -146,7 +148,7 @@ export class MessageRouter extends EventEmitter {
     // Check for duplicates
     const messageHash = this.#hashMessage(message);
     if (this.#isDuplicate(messageHash)) {
-      logger.debug('Duplicate message detected, skipping broadcast', { hash: messageHash });
+      this.#logger.system(LogLevel.DEBUG, 'Duplicate message detected, skipping broadcast', { hash: messageHash });
       return results;
     }
 
@@ -161,7 +163,7 @@ export class MessageRouter extends EventEmitter {
         await this.#directConnectionService.sendMessage(peer.nodeId, message);
         results.direct.push(peer.nodeId);
       } catch (err) {
-        logger.debug('Direct broadcast failed to peer', {
+        this.#logger.system(LogLevel.DEBUG, 'Direct broadcast failed to peer', {
           peerId: peer.nodeId,
           error: err.message,
         });
@@ -175,12 +177,12 @@ export class MessageRouter extends EventEmitter {
         await this.#broadcastViaGrenache(message);
         results.grenache = 'sent';
       } catch (err) {
-        logger.debug('Grenache broadcast failed', { error: err.message });
+        this.#logger.system(LogLevel.DEBUG, 'Grenache broadcast failed', { error: err.message });
         results.grenache = 'failed';
       }
     }
 
-    logger.info('Broadcast complete', {
+    this.#logger.system(LogLevel.INFO, 'Broadcast complete', {
       type: message.type,
       direct: results.direct.length,
       grenache: results.grenache,
@@ -214,7 +216,7 @@ export class MessageRouter extends EventEmitter {
 
       default:
         // Unknown message type, try broadcast
-        logger.warn('Unknown message type, broadcasting', { type: message.type });
+        this.#logger.system(LogLevel.WARN, 'Unknown message type, broadcasting', { type: message.type });
         return this.broadcast(message);
     }
   }
@@ -233,7 +235,7 @@ export class MessageRouter extends EventEmitter {
 
     // Note: Actual implementation depends on GrenacheService API
     // This is a placeholder
-    logger.debug('Sending via Grenache', { peerId, type: message.type });
+    this.#logger.system(LogLevel.DEBUG, 'Sending via Grenache', { peerId, type: message.type });
 
     // The actual Grenache service should have a method to send to specific peer
     // For now, we'll emit an event that can be handled by the integration layer
@@ -251,7 +253,7 @@ export class MessageRouter extends EventEmitter {
       throw new Error('Grenache service not available');
     }
 
-    logger.debug('Broadcasting via Grenache', { type: message.type });
+    this.#logger.system(LogLevel.DEBUG, 'Broadcasting via Grenache', { type: message.type });
 
     // Emit event for integration layer to handle
     this.emit('grenache:broadcast', { message });
@@ -265,12 +267,12 @@ export class MessageRouter extends EventEmitter {
    */
   #queueMessage(peerId, message) {
     if (this.#messageQueue.length >= this.#maxQueueSize) {
-      logger.warn('Message queue full, dropping oldest message');
+      this.#logger.system(LogLevel.WARN, 'Message queue full, dropping oldest message');
       this.#messageQueue.shift();
     }
 
     this.#messageQueue.push(new QueuedMessage(peerId, message));
-    logger.debug('Message queued', { peerId, queueSize: this.#messageQueue.length });
+    this.#logger.system(LogLevel.DEBUG, 'Message queued', { peerId, queueSize: this.#messageQueue.length });
   }
 
   /**
@@ -282,7 +284,7 @@ export class MessageRouter extends EventEmitter {
       return;
     }
 
-    logger.debug('Processing message queue', { size: this.#messageQueue.length });
+    this.#logger.system(LogLevel.DEBUG, 'Processing message queue', { size: this.#messageQueue.length });
 
     const now = Date.now();
     const toRetry = [];
@@ -298,7 +300,7 @@ export class MessageRouter extends EventEmitter {
 
       // Check max retries
       if (queuedMsg.attempts >= this.#maxRetries) {
-        logger.warn('Max retries exceeded, dropping message', {
+        this.#logger.system(LogLevel.WARN, 'Max retries exceeded, dropping message', {
           peerId: queuedMsg.peerId,
           attempts: queuedMsg.attempts,
         });
@@ -316,13 +318,13 @@ export class MessageRouter extends EventEmitter {
 
       try {
         await this.sendToPeer(queuedMsg.peerId, queuedMsg.message);
-        logger.info('Queued message delivered', {
+        this.#logger.system(LogLevel.INFO, 'Queued message delivered', {
           peerId: queuedMsg.peerId,
           attempts: queuedMsg.attempts,
         });
         toRemove.push(index);
       } catch (err) {
-        logger.debug('Queued message retry failed', {
+        this.#logger.system(LogLevel.DEBUG, 'Queued message retry failed', {
           peerId: queuedMsg.peerId,
           attempts: queuedMsg.attempts,
           error: err.message,
@@ -425,6 +427,6 @@ export class MessageRouter extends EventEmitter {
    */
   clearQueue() {
     this.#messageQueue = [];
-    logger.info('Message queue cleared');
+    this.#logger.system(LogLevel.INFO, 'Message queue cleared');
   }
 }

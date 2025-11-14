@@ -8,9 +8,7 @@
 import EventEmitter from 'events';
 import { PeerStatus, ProtocolConstants } from './peer-protocol.js';
 import { PeerStorage } from './peer-storage.js';
-import { createLogger } from '../utils/logger.js';
-
-const logger = createLogger('PeerManager');
+import { logger, LogLevel } from '../utils/logger.js';
 
 /**
  * Peer manager class
@@ -24,6 +22,7 @@ export class PeerManager extends EventEmitter {
   #heartbeatInterval;
   #heartbeatTimer;
   #reconnectTimer;
+  #logger;
 
   /**
    * Create peer manager instance
@@ -35,6 +34,10 @@ export class PeerManager extends EventEmitter {
 
     this.#nodeId = nodeId;
     this.#peers = new Map();
+    this.#logger = logger.child({
+      component: 'PeerManager',
+      nodeId: nodeId.slice(0, 8),
+    });
 
     // Configuration
     this.#maxInboundPeers = options.maxInboundPeers || ProtocolConstants.MAX_INBOUND_CONNECTIONS;
@@ -54,11 +57,11 @@ export class PeerManager extends EventEmitter {
    * @returns {Promise<void>}
    */
   async initialize() {
-    logger.info('Initializing peer manager', { nodeId: this.#nodeId });
+    this.#logger.system(LogLevel.INFO, 'Initializing peer manager', { nodeId: this.#nodeId });
 
     // Load persisted peers
     const persistedPeers = await this.#peerStorage.load();
-    logger.info(`Loaded ${persistedPeers.length} persisted peers`);
+    this.#logger.system(LogLevel.INFO, `Loaded ${persistedPeers.length} persisted peers`);
 
     // Store as disconnected peers (will be reconnected later)
     for (const peerData of persistedPeers) {
@@ -76,7 +79,7 @@ export class PeerManager extends EventEmitter {
     this.#startHeartbeat();
     this.#startReconnection();
 
-    logger.info('Peer manager initialized');
+    this.#logger.system(LogLevel.INFO, 'Peer manager initialized');
   }
 
   /**
@@ -89,18 +92,18 @@ export class PeerManager extends EventEmitter {
 
     // Don't add ourselves
     if (nodeId === this.#nodeId) {
-      logger.debug('Ignoring self-connection');
+      this.#logger.system(LogLevel.DEBUG, 'Ignoring self-connection');
       return false;
     }
 
     // Check connection limits
     if (inbound && this.#getInboundPeerCount() >= this.#maxInboundPeers) {
-      logger.warn('Inbound peer limit reached', { limit: this.#maxInboundPeers });
+      this.#logger.system(LogLevel.WARN, 'Inbound peer limit reached', { limit: this.#maxInboundPeers });
       return false;
     }
 
     if (!inbound && this.#getOutboundPeerCount() >= this.#maxOutboundPeers) {
-      logger.warn('Outbound peer limit reached', { limit: this.#maxOutboundPeers });
+      this.#logger.system(LogLevel.WARN, 'Outbound peer limit reached', { limit: this.#maxOutboundPeers });
       return false;
     }
 
@@ -118,12 +121,12 @@ export class PeerManager extends EventEmitter {
         existing.lastSeen = Date.now();
         existing.reconnectAttempts = 0;
 
-        logger.info('Updated existing peer', { nodeId, address, port });
+        this.#logger.system(LogLevel.INFO, 'Updated existing peer', { nodeId, address, port });
         this.emit('peer:updated', existing);
         return true;
       }
 
-      logger.debug('Peer already connected', { nodeId });
+      this.#logger.system(LogLevel.DEBUG, 'Peer already connected', { nodeId });
       return false;
     }
 
@@ -152,7 +155,7 @@ export class PeerManager extends EventEmitter {
 
     this.#peers.set(nodeId, peer);
 
-    logger.info('Added new peer', { nodeId, address, port, inbound });
+    this.#logger.system(LogLevel.INFO, 'Added new peer', { nodeId, address, port, inbound });
     this.emit('peer:added', peer);
 
     // Persist peers (debounced)
@@ -179,7 +182,7 @@ export class PeerManager extends EventEmitter {
       try {
         peer.connection.end();
       } catch (err) {
-        logger.error('Error closing peer connection', { nodeId, error: err.message });
+        this.#logger.error(LogLevel.ERROR, 'Error closing peer connection', err);
       }
     }
 
@@ -189,7 +192,7 @@ export class PeerManager extends EventEmitter {
     peer.disconnectedAt = Date.now();
     peer.disconnectReason = reason;
 
-    logger.info('Peer disconnected', { nodeId, reason });
+    this.#logger.system(LogLevel.INFO, 'Peer disconnected', { nodeId, reason });
     this.emit('peer:disconnected', peer);
 
     // Persist peers
@@ -386,7 +389,7 @@ export class PeerManager extends EventEmitter {
       const timeSinceHeartbeat = now - peer.lastHeartbeat;
 
       if (timeSinceHeartbeat > timeout) {
-        logger.warn('Peer heartbeat timeout', {
+        this.#logger.system(LogLevel.WARN, 'Peer heartbeat timeout', {
           nodeId: peer.nodeId,
           timeSinceHeartbeat,
         });
@@ -437,7 +440,7 @@ export class PeerManager extends EventEmitter {
         peer.reconnectAttempts++;
         peer.status = PeerStatus.CONNECTING;
 
-        logger.info('Attempting peer reconnection', {
+        this.#logger.system(LogLevel.INFO, 'Attempting peer reconnection', {
           nodeId: peer.nodeId,
           attempt: peer.reconnectAttempts,
           address: peer.address,
@@ -474,7 +477,7 @@ export class PeerManager extends EventEmitter {
   #persistPeers() {
     const peers = Array.from(this.#peers.values());
     this.#peerStorage.save(peers).catch((err) => {
-      logger.error('Failed to persist peers', { error: err.message });
+      this.#logger.error(LogLevel.ERROR, 'Failed to persist peers', err);
     });
   }
 
@@ -483,7 +486,7 @@ export class PeerManager extends EventEmitter {
    * @returns {Promise<void>}
    */
   async cleanup() {
-    logger.info('Cleaning up peer manager');
+    this.#logger.system(LogLevel.INFO, 'Cleaning up peer manager');
 
     // Stop timers
     if (this.#heartbeatTimer) {
@@ -506,6 +509,6 @@ export class PeerManager extends EventEmitter {
     const peers = Array.from(this.#peers.values());
     await this.#peerStorage.saveImmediate(peers);
 
-    logger.info('Peer manager cleaned up');
+    this.#logger.system(LogLevel.INFO, 'Peer manager cleaned up');
   }
 }

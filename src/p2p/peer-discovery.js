@@ -12,9 +12,7 @@
 import dgram from 'dgram';
 import EventEmitter from 'events';
 import { MessageType, PeerMessage } from './peer-protocol.js';
-import { createLogger } from '../utils/logger.js';
-
-const logger = createLogger('PeerDiscovery');
+import { logger, LogLevel } from '../utils/logger.js';
 
 /**
  * mDNS configuration
@@ -40,6 +38,7 @@ export class PeerDiscovery extends EventEmitter {
   #mdnsAnnounceTimer;
   #peerExchangeTimer;
   #isRunning;
+  #logger;
 
   /**
    * Create peer discovery instance
@@ -63,6 +62,10 @@ export class PeerDiscovery extends EventEmitter {
     this.#mdnsAnnounceTimer = null;
     this.#peerExchangeTimer = null;
     this.#isRunning = false;
+    this.#logger = logger.child({
+      component: 'PeerDiscovery',
+      nodeId: nodeId.slice(0, 8),
+    });
   }
 
   /**
@@ -71,11 +74,11 @@ export class PeerDiscovery extends EventEmitter {
    */
   async start() {
     if (this.#isRunning) {
-      logger.warn('Peer discovery already running');
+      this.#logger.system(LogLevel.WARN, 'Peer discovery already running');
       return;
     }
 
-    logger.info('Starting peer discovery', {
+    this.#logger.system(LogLevel.INFO, 'Starting peer discovery', {
       strategies: {
         mdns: this.#enableMDNS,
         grenache: this.#enableGrenache,
@@ -108,7 +111,7 @@ export class PeerDiscovery extends EventEmitter {
 
     await Promise.allSettled(promises);
 
-    logger.info('Peer discovery started');
+    this.#logger.system(LogLevel.INFO, 'Peer discovery started');
   }
 
   /**
@@ -120,7 +123,7 @@ export class PeerDiscovery extends EventEmitter {
       return;
     }
 
-    logger.info('Stopping peer discovery');
+    this.#logger.system(LogLevel.INFO, 'Stopping peer discovery');
 
     this.#isRunning = false;
 
@@ -141,7 +144,7 @@ export class PeerDiscovery extends EventEmitter {
       this.#peerExchangeTimer = null;
     }
 
-    logger.info('Peer discovery stopped');
+    this.#logger.system(LogLevel.INFO, 'Peer discovery stopped');
   }
 
   /**
@@ -169,7 +172,7 @@ export class PeerDiscovery extends EventEmitter {
    */
   async #startMDNS() {
     try {
-      logger.info('Starting mDNS discovery');
+      this.#logger.system(LogLevel.INFO, 'Starting mDNS discovery');
 
       this.#mdnsSocket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
 
@@ -178,7 +181,7 @@ export class PeerDiscovery extends EventEmitter {
       });
 
       this.#mdnsSocket.on('error', (err) => {
-        logger.error('mDNS socket error', { error: err.message });
+        this.#logger.error(LogLevel.ERROR, 'mDNS socket error', err);
       });
 
       // Bind to mDNS port
@@ -201,9 +204,9 @@ export class PeerDiscovery extends EventEmitter {
         this.#announceMDNS();
       }, MDNS_ANNOUNCE_INTERVAL);
 
-      logger.info('mDNS discovery started');
+      this.#logger.system(LogLevel.INFO, 'mDNS discovery started');
     } catch (err) {
-      logger.error('Failed to start mDNS', { error: err.message });
+      this.#logger.error(LogLevel.ERROR, 'Failed to start mDNS', err);
     }
   }
 
@@ -227,9 +230,9 @@ export class PeerDiscovery extends EventEmitter {
 
     this.#mdnsSocket.send(buffer, 0, buffer.length, MDNS_PORT, MDNS_MULTICAST_ADDR, (err) => {
       if (err) {
-        logger.error('Failed to send mDNS announcement', { error: err.message });
+        this.#logger.error(LogLevel.ERROR, 'Failed to send mDNS announcement', err);
       } else {
-        logger.debug('mDNS announcement sent');
+        this.#logger.system(LogLevel.DEBUG, 'mDNS announcement sent');
       }
     });
   }
@@ -253,7 +256,7 @@ export class PeerDiscovery extends EventEmitter {
         return;
       }
 
-      logger.info('Discovered peer via mDNS', {
+      this.#logger.system(LogLevel.INFO, 'Discovered peer via mDNS', {
         nodeId: data.nodeId,
         address: rinfo.address,
         port: data.port,
@@ -266,7 +269,7 @@ export class PeerDiscovery extends EventEmitter {
         source: 'mdns',
       });
     } catch (err) {
-      logger.debug('Invalid mDNS message', { error: err.message });
+      this.#logger.system(LogLevel.DEBUG, 'Invalid mDNS message', { error: err.message });
     }
   }
 
@@ -277,16 +280,16 @@ export class PeerDiscovery extends EventEmitter {
    */
   async #startGrenacheDiscovery() {
     if (!this.#grenacheService) {
-      logger.warn('Grenache service not available');
+      this.#logger.system(LogLevel.WARN, 'Grenache service not available');
       return;
     }
 
     try {
-      logger.info('Starting Grenache discovery');
+      this.#logger.system(LogLevel.INFO, 'Starting Grenache discovery');
       await this.#discoverViaGrenache();
-      logger.info('Grenache discovery started');
+      this.#logger.system(LogLevel.INFO, 'Grenache discovery started');
     } catch (err) {
-      logger.error('Failed to start Grenache discovery', { error: err.message });
+      this.#logger.error(LogLevel.ERROR, 'Failed to start Grenache discovery', err);
     }
   }
 
@@ -303,12 +306,12 @@ export class PeerDiscovery extends EventEmitter {
     try {
       // Query Grenache for peers
       // Note: This is a placeholder - actual implementation depends on GrenacheService API
-      logger.debug('Querying Grenache for peers');
+      this.#logger.system(LogLevel.DEBUG, 'Querying Grenache for peers');
 
       // The Grenache service will emit peer:discovered events
       // through its own mechanisms
     } catch (err) {
-      logger.error('Grenache discovery failed', { error: err.message });
+      this.#logger.error(LogLevel.ERROR, 'Grenache discovery failed', err);
     }
   }
 
@@ -318,7 +321,7 @@ export class PeerDiscovery extends EventEmitter {
    * @returns {Promise<void>}
    */
   async #connectToBootstrapPeers() {
-    logger.info('Connecting to bootstrap peers', { count: this.#bootstrapPeers.length });
+    this.#logger.system(LogLevel.INFO, 'Connecting to bootstrap peers', { count: this.#bootstrapPeers.length });
 
     for (const peerAddr of this.#bootstrapPeers) {
       try {
@@ -326,11 +329,11 @@ export class PeerDiscovery extends EventEmitter {
         const port = parseInt(portStr, 10);
 
         if (!address || !port) {
-          logger.warn('Invalid bootstrap peer address', { peerAddr });
+          this.#logger.system(LogLevel.WARN, 'Invalid bootstrap peer address', { peerAddr });
           continue;
         }
 
-        logger.info('Connecting to bootstrap peer', { address, port });
+        this.#logger.system(LogLevel.INFO, 'Connecting to bootstrap peer', { address, port });
 
         this.emit('peer:discovered', {
           address,
@@ -338,10 +341,7 @@ export class PeerDiscovery extends EventEmitter {
           source: 'bootstrap',
         });
       } catch (err) {
-        logger.error('Failed to connect to bootstrap peer', {
-          peerAddr,
-          error: err.message,
-        });
+        this.#logger.error(LogLevel.ERROR, 'Failed to connect to bootstrap peer', err);
       }
     }
   }
@@ -351,7 +351,7 @@ export class PeerDiscovery extends EventEmitter {
    * @private
    */
   #startPeerExchange() {
-    logger.info('Starting peer exchange');
+    this.#logger.system(LogLevel.INFO, 'Starting peer exchange');
 
     // Request peers from connected peers periodically
     this.#peerExchangeTimer = setInterval(() => {
@@ -370,7 +370,7 @@ export class PeerDiscovery extends EventEmitter {
       return;
     }
 
-    logger.debug('Requesting peer exchange', { peerCount: connectedPeers.length });
+    this.#logger.system(LogLevel.DEBUG, 'Requesting peer exchange', { peerCount: connectedPeers.length });
 
     for (const peer of connectedPeers) {
       this.emit('peer:exchange_request', { peerId: peer.nodeId });
@@ -383,7 +383,7 @@ export class PeerDiscovery extends EventEmitter {
    * @param {string} source - Source peer ID
    */
   handlePeerExchangeResponse(peers, source) {
-    logger.info('Received peer exchange', { count: peers.length, from: source });
+    this.#logger.system(LogLevel.INFO, 'Received peer exchange', { count: peers.length, from: source });
 
     for (const peer of peers) {
       // Ignore ourselves
@@ -397,7 +397,7 @@ export class PeerDiscovery extends EventEmitter {
         continue;
       }
 
-      logger.info('Discovered peer via peer exchange', {
+      this.#logger.system(LogLevel.INFO, 'Discovered peer via peer exchange', {
         nodeId: peer.nodeId,
         address: peer.address,
         port: peer.port,
@@ -420,7 +420,7 @@ export class PeerDiscovery extends EventEmitter {
   addBootstrapPeer(address) {
     if (!this.#bootstrapPeers.includes(address)) {
       this.#bootstrapPeers.push(address);
-      logger.info('Added bootstrap peer', { address });
+      this.#logger.system(LogLevel.INFO, 'Added bootstrap peer', { address });
     }
   }
 
