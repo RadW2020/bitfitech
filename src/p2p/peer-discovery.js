@@ -1,20 +1,19 @@
 /**
- * Peer Discovery - Pure P2P
+ * Peer Discovery
  *
- * Multi-strategy peer discovery for true P2P networks:
+ * Multi-strategy peer discovery system supporting:
  * - Persisted peers (reconnection)
- * - Bootstrap peers (well-known nodes)
+ * - Bootstrap peers (manual configuration)
  * - mDNS (local network discovery)
+ * - Grenache DHT (optional)
  * - Peer exchange (peers share peer lists)
- *
- * NO DHT, NO Grenache - just direct peer discovery.
  */
 
 import dgram from 'dgram';
 import EventEmitter from 'events';
 import { MessageType, PeerMessage } from './peer-protocol.js';
 import { logger, LogLevel } from '../utils/logger.js';
-import { getBootstrapNodes } from './well-known-nodes.js';
+import { getBootstrapNodes, getRecommendedBootstrapCount, BOOTSTRAP_CONFIG } from './well-known-nodes.js';
 
 /**
  * mDNS configuration
@@ -25,14 +24,16 @@ const MDNS_SERVICE_NAME = '_bitfinex-exchange._tcp.local';
 const MDNS_ANNOUNCE_INTERVAL = 30000; // 30 seconds
 
 /**
- * Pure P2P Peer discovery class
+ * Peer discovery class
  */
 export class PeerDiscovery extends EventEmitter {
   #nodeId;
   #port;
   #peerManager;
+  #grenacheService;
   #bootstrapPeers;
   #enableMDNS;
+  #enableGrenache;
   #enablePeerExchange;
   #mdnsSocket;
   #mdnsAnnounceTimer;
@@ -53,6 +54,7 @@ export class PeerDiscovery extends EventEmitter {
     this.#nodeId = nodeId;
     this.#port = port;
     this.#peerManager = peerManager;
+    this.#grenacheService = options.grenacheService || null;
 
     // Combine custom bootstrap peers with well-known nodes
     const useWellKnownNodes = options.useWellKnownNodes !== false;
@@ -65,6 +67,7 @@ export class PeerDiscovery extends EventEmitter {
       : customBootstrap;
 
     this.#enableMDNS = options.enableMDNS !== false;
+    this.#enableGrenache = options.enableGrenache !== false;
     this.#enablePeerExchange = options.enablePeerExchange !== false;
     this.#mdnsSocket = null;
     this.#mdnsAnnounceTimer = null;
@@ -95,9 +98,10 @@ export class PeerDiscovery extends EventEmitter {
       return;
     }
 
-    this.#logger.system(LogLevel.INFO, 'Starting pure P2P peer discovery', {
+    this.#logger.system(LogLevel.INFO, 'Starting peer discovery', {
       strategies: {
         mdns: this.#enableMDNS,
+        grenache: this.#enableGrenache,
         peerExchange: this.#enablePeerExchange,
         bootstrap: this.#bootstrapPeers.length > 0,
       },
@@ -112,6 +116,10 @@ export class PeerDiscovery extends EventEmitter {
       promises.push(this.#startMDNS());
     }
 
+    if (this.#enableGrenache && this.#grenacheService) {
+      promises.push(this.#startGrenacheDiscovery());
+    }
+
     if (this.#enablePeerExchange) {
       this.#startPeerExchange();
     }
@@ -123,7 +131,7 @@ export class PeerDiscovery extends EventEmitter {
 
     await Promise.allSettled(promises);
 
-    this.#logger.system(LogLevel.INFO, 'Pure P2P peer discovery started');
+    this.#logger.system(LogLevel.INFO, 'Peer discovery started');
   }
 
   /**
@@ -165,6 +173,10 @@ export class PeerDiscovery extends EventEmitter {
    */
   async discover() {
     const promises = [];
+
+    if (this.#enableGrenache && this.#grenacheService) {
+      promises.push(this.#discoverViaGrenache());
+    }
 
     if (this.#bootstrapPeers.length > 0) {
       promises.push(this.#connectToBootstrapPeers());
@@ -278,6 +290,48 @@ export class PeerDiscovery extends EventEmitter {
       });
     } catch (err) {
       this.#logger.system(LogLevel.DEBUG, 'Invalid mDNS message', { error: err.message });
+    }
+  }
+
+  /**
+   * Start Grenache discovery
+   * @private
+   * @returns {Promise<void>}
+   */
+  async #startGrenacheDiscovery() {
+    if (!this.#grenacheService) {
+      this.#logger.system(LogLevel.WARN, 'Grenache service not available');
+      return;
+    }
+
+    try {
+      this.#logger.system(LogLevel.INFO, 'Starting Grenache discovery');
+      await this.#discoverViaGrenache();
+      this.#logger.system(LogLevel.INFO, 'Grenache discovery started');
+    } catch (err) {
+      this.#logger.error(LogLevel.ERROR, 'Failed to start Grenache discovery', err);
+    }
+  }
+
+  /**
+   * Discover peers via Grenache DHT
+   * @private
+   * @returns {Promise<void>}
+   */
+  async #discoverViaGrenache() {
+    if (!this.#grenacheService) {
+      return;
+    }
+
+    try {
+      // Query Grenache for peers
+      // Note: This is a placeholder - actual implementation depends on GrenacheService API
+      this.#logger.system(LogLevel.DEBUG, 'Querying Grenache for peers');
+
+      // The Grenache service will emit peer:discovered events
+      // through its own mechanisms
+    } catch (err) {
+      this.#logger.error(LogLevel.ERROR, 'Grenache discovery failed', err);
     }
   }
 
@@ -396,10 +450,10 @@ export class PeerDiscovery extends EventEmitter {
    */
   getStats() {
     return {
-      mode: 'Pure P2P',
       isRunning: this.#isRunning,
       strategies: {
         mdns: this.#enableMDNS,
+        grenache: this.#enableGrenache,
         peerExchange: this.#enablePeerExchange,
       },
       bootstrapPeers: this.#bootstrapPeers.length,
