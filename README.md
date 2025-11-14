@@ -1,75 +1,107 @@
 # P2P Distributed Exchange
 
-**🎯 True Peer-to-Peer Exchange** - Now with **direct TCP connections**, **zero external dependencies**, and **optional Grenache** for enhanced discovery.
+**🎯 TRUE Peer-to-Peer Exchange** - Now with **embedded Kademlia DHT**, **zero external dependencies**, and **fully distributed architecture**.
 
-## ✨ What's New: Truly Decentralized P2P
+## 🚀 What's New: REAL P2P with Embedded Grape DHT
 
-This exchange now operates in **two modes**:
+This is now a **TRUE P2P system** where each node runs its own Grape DHT server!
 
-1. **🔥 Pure P2P Mode** (Truly Decentralized) - No external servers required!
-2. **⚡ Hybrid Mode** - P2P connections + Grenache for faster discovery
+### Architecture Modes:
 
-**P2P is always enabled** - this is a true peer-to-peer exchange with no legacy centralized mode.
+1. **⭐ Embedded Grape (TRUE P2P)** - RECOMMENDED
+   - Each node runs its own Grape DHT server
+   - Kademlia DHT (same as BitTorrent)
+   - Zero external infrastructure
+   - **This is what makes it REAL P2P!**
+
+2. **🔥 Pure P2P Mode** (Without DHT) - Simple
+   - Direct TCP connections only
+   - mDNS + Bootstrap peers
+   - Good for small networks
+
+3. **⚡ Legacy Mode** (External Grape) - Not recommended
+   - Requires manual Grape servers
+   - Centralized discovery (NOT true P2P)
+
+**Embedded Grape is enabled by default** - you get true P2P out of the box!
 
 ### Key Features
 
+- ✅ **Embedded Kademlia DHT** - Each node runs its own Grape server (TRUE P2P!)
 - ✅ **Direct TCP peer-to-peer connections** - No central servers required
+- ✅ **Distributed peer discovery** - Kademlia protocol (same as BitTorrent)
 - ✅ **mDNS local network discovery** - Zero-config on LANs
 - ✅ **Peer exchange protocol** - Exponential peer discovery
 - ✅ **Automatic peer reconnection** - Resilient network
 - ✅ **Persistent peer storage** - Remembers peers across restarts
-- ✅ **Grenache optional** - Use it as a discovery accelerator or not at all
+- ✅ **No single point of failure** - Fully distributed system
 
 ## 🚀 Quick Start
 
-### Option A: Pure P2P Mode (No Grenache Required!)
+### Option A: Embedded Grape DHT (TRUE P2P) - ⭐ RECOMMENDED
 
-**No external infrastructure needed** - nodes connect directly to each other.
+**Each node runs its own Grape DHT server** - forming a distributed Kademlia network.
 
 ```bash
 # 1. Install dependencies
 npm install
 
-# 2. Start first node
-P2P_PORT=3001 DISCOVERY_GRENACHE=false npm start
+# 2. Start Node 1 (Bootstrap node)
+GRAPE_DHT_PORT=20001 GRAPE_API_PORT=30001 P2P_PORT=3001 npm start
 
-# 3. Start second node (connects to first)
-P2P_PORT=3002 BOOTSTRAP_PEERS=127.0.0.1:3001 DISCOVERY_GRENACHE=false npm start
+# 3. Start Node 2 (Connects to Node 1's DHT)
+GRAPE_DHT_PORT=20002 GRAPE_API_PORT=30002 GRAPE_BOOTSTRAP_NODES=127.0.0.1:20001 P2P_PORT=3002 npm start
 
-# 4. Start third node (connects to both)
-P2P_PORT=3003 BOOTSTRAP_PEERS=127.0.0.1:3001,127.0.0.1:3002 DISCOVERY_GRENACHE=false npm start
+# 4. Start Node 3 (Connects to existing DHT)
+GRAPE_DHT_PORT=20003 GRAPE_API_PORT=30003 GRAPE_BOOTSTRAP_NODES=127.0.0.1:20001,127.0.0.1:20002 P2P_PORT=3003 npm start
 ```
 
-**That's it!** The nodes will:
-- Connect directly to each other via TCP
-- Discover more peers through peer exchange
-- Persist peers to `.peers.json` for automatic reconnection
+**What happens:**
+- ✅ Each node runs its own Grape DHT server (Kademlia)
+- ✅ Nodes form a distributed DHT network
+- ✅ Zero external infrastructure required
+- ✅ **THIS IS TRUE P2P!** No central servers, fully distributed
 
-### Option B: Hybrid Mode (P2P + Grenache)
+See [EMBEDDED_GRAPE_DHT.md](./EMBEDDED_GRAPE_DHT.md) for detailed documentation.
 
-Best of both worlds - fast Grenache discovery + direct P2P connections.
+### Option B: Pure P2P Mode (Without DHT)
+
+**Direct TCP connections only** - good for simple/small networks.
 
 ```bash
 # 1. Install dependencies
 npm install
+
+# 2. Start first node (disable embedded Grape)
+EMBEDDED_GRAPE=false P2P_PORT=3001 DISCOVERY_GRENACHE=false npm start
+
+# 3. Start second node (connects to first)
+EMBEDDED_GRAPE=false P2P_PORT=3002 BOOTSTRAP_PEERS=127.0.0.1:3001 DISCOVERY_GRENACHE=false npm start
+
+# 4. Start third node (connects to both)
+EMBEDDED_GRAPE=false P2P_PORT=3003 BOOTSTRAP_PEERS=127.0.0.1:3001,127.0.0.1:3002 DISCOVERY_GRENACHE=false npm start
+```
+
+**What happens:**
+- Uses mDNS + bootstrap peers for discovery
+- No DHT (less scalable)
+- Good for small, local networks
+
+### Option C: Legacy Mode (External Grape) - ❌ NOT RECOMMENDED
+
+**Requires manual Grape servers** - this is NOT true P2P (centralized discovery).
+
+```bash
+# 1. Install Grape CLI
 npm install -g grenache-grape
 
-# 2. Start Grenache DHT (optional, for discovery acceleration)
-# Terminal 1
+# 2. Manually start Grape servers
 grape --dp 20001 --aph 30001 --bn '127.0.0.1:20002'
-
-# Terminal 2
 grape --dp 20002 --aph 40001 --bn '127.0.0.1:20001'
 
-# 3. Start exchange nodes (will use both P2P and Grenache)
-# Terminal 3
-P2P_PORT=3001 npm start
-
-# Terminal 4
-P2P_PORT=3002 npm start
-
-# Terminal 5
-P2P_PORT=3003 npm start
+# 3. Start nodes with embedded Grape disabled
+EMBEDDED_GRAPE=false GRAPE_URL=http://127.0.0.1:30001 P2P_PORT=3001 npm start
+EMBEDDED_GRAPE=false GRAPE_URL=http://127.0.0.1:30001 P2P_PORT=3002 npm start
 ```
 
 ## 🔧 How It Works
